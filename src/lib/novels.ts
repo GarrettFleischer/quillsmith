@@ -264,6 +264,18 @@ export function createScene(chapterId: string, novelId: string, title = "New sce
   return db.select().from(scenes).where(eq(scenes.id, sceneId)).get()!;
 }
 
+export function updateSceneTitle(sceneId: string, novelId: string, title: string) {
+  const db = getDb();
+  const existing = db.select().from(scenes).where(eq(scenes.id, sceneId)).get();
+  if (!existing) throw new Error("Scene not found");
+  db.update(scenes)
+    .set({ title, updatedAt: now() })
+    .where(eq(scenes.id, sceneId))
+    .run();
+  touchNovel(novelId);
+  return db.select().from(scenes).where(eq(scenes.id, sceneId)).get()!;
+}
+
 export function saveSceneContent(
   sceneId: string,
   novelId: string,

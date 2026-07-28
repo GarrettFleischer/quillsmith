@@ -13,6 +13,7 @@ import {
   restoreSceneRevision,
   saveSceneContent,
   updateNovelOverview,
+  updateSceneTitle,
   upsertAct,
   upsertBeat,
   upsertChapter,
@@ -87,6 +88,14 @@ export async function PATCH(
       if (body.payload.scanMentions) scanMentionsForScene(id, sceneId);
       return Response.json(saved);
     }
+    case "updateSceneTitle":
+      return Response.json(
+        updateSceneTitle(
+          String(body.payload.sceneId),
+          id,
+          String(body.payload.title ?? "Scene"),
+        ),
+      );
     case "listRevisions":
       return Response.json(listSceneRevisions(String(body.payload.sceneId)));
     case "restoreRevision":

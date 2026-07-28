@@ -16,11 +16,15 @@ export function KnowledgeSidebar({
   entries,
   onChange,
   onJumpToScene,
+  onCollapse,
+  className,
 }: {
   novelId: string;
   entries: KnowledgeEntry[];
   onChange: () => void;
   onJumpToScene: (sceneId: string) => void;
+  onCollapse?: () => void;
+  className?: string;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -103,11 +107,24 @@ export function KnowledgeSidebar({
   }
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col border-r border-border bg-surface/70">
+    <aside
+      className={`flex h-full w-[280px] shrink-0 flex-col border-r border-border bg-surface/70 panel-enter ${className ?? ""}`}
+    >
       <div className="border-b border-border px-3 py-3">
-        <h2 className="font-serif text-lg">Knowledge</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-serif text-lg">Knowledge</h2>
+          {onCollapse ? (
+            <button
+              type="button"
+              className="text-xs text-muted hover:text-text hover:underline"
+              onClick={onCollapse}
+            >
+              Hide
+            </button>
+          ) : null}
+        </div>
         <input
-          className="mt-2 w-full rounded border border-border bg-bg px-2 py-1 text-sm"
+          className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-1 text-sm"
           placeholder="Search…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}

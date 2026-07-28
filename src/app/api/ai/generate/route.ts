@@ -16,6 +16,7 @@ import {
   buildNovelMeta,
   buildOutlineXml,
   buildSceneInstructions,
+  buildVoiceAnchor,
 } from "@/lib/prompts/context";
 import { PROSE_SYSTEM_PROMPT, REWRITE_SYSTEM_PROMPT } from "@/lib/prompts/rules";
 import { runAgentLoop, sseEncode, type ChatMessage } from "@/lib/openrouter";
@@ -101,11 +102,11 @@ export async function POST(req: Request) {
     })();
     const taskLead = isExpand
       ? wordTarget
-        ? `Write about ${wordTarget} words that continue the story, using the following instructions:`
-        : `Continue the story using the following instructions (stop once the beats are covered; a modest length is better than padding):`
+        ? `Write up to about ${wordTarget} words that continue the story, using the following instructions. Stop early if the beats are covered sooner:`
+        : `Continue the story using the following instructions. Stop once the beats are covered; never pad:`
       : wordTarget
-        ? `Rewrite the current scene in about ${wordTarget} words, using the following instructions:`
-        : `Rewrite the current scene using the following instructions:`;
+        ? `Condense the current scene to about ${wordTarget} words:`
+        : `Condense the current scene:`;
 
     const bag = {
       userInstruction: body.instruction,
@@ -116,13 +117,18 @@ export async function POST(req: Request) {
         userInstruction: body.instruction,
         answers,
         sceneTitle: scene.title,
+        hasExistingProse: Boolean(currentPlain.trim()),
       }),
       codex: buildCodex(allKnowledge),
       outline: buildOutlineXml(tree),
       novelMeta: buildNovelMeta(tree, answers),
       currentScene: currentPlain,
+      voiceAnchor: buildVoiceAnchor(currentPlain, prev ? plainFromTipTap(prev.content) : ""),
       previousScene: prev ? plainFromTipTap(prev.content) : "",
-      nextScene: next ? plainFromTipTap(next.content) : "",
+      nextScene: next
+        ? plainFromTipTap(next.content) ||
+          `(untitled next scene${next.title ? `: ${next.title}` : ""} - do not write this yet)`
+        : "(none - do not invent a following scene)",
       chapterText: siblingScenes.map((s) => plainFromTipTap(s.content)).join("\n\n"),
       chapterBeats: chapterBeats.map((b, i) => `${i + 1}. ${b.content}`).join("\n"),
       chapterGoal: chapter.goal ?? "",

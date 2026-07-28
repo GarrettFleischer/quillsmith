@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -20,6 +21,7 @@ export function SceneEditor({
   title,
   commands,
   model,
+  hasApiKey = true,
   onSaved,
 }: {
   novelId: string;
@@ -30,22 +32,29 @@ export function SceneEditor({
   title: string;
   commands: Command[];
   model: string;
+  hasApiKey?: boolean;
   onSaved: () => void;
 }) {
   const setActive = useEditorStore((s) => s.setActive);
   const setStatus = useEditorStore((s) => s.setStatus);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sceneTitle, setSceneTitle] = useState(title || "Scene");
   const [slashOpen, setSlashOpen] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [activeCommand, setActiveCommand] = useState<Command | null>(null);
   const [streaming, setStreaming] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [hunks, setHunks] = useState<DiffHunk[] | null>(null);
   const [preRewrite, setPreRewrite] = useState("");
   const [revisions, setRevisions] = useState<
     Array<{ id: string; source: string; label: string | null; createdAt: string }>
   >([]);
   const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => {
+    setSceneTitle(title || "Scene");
+  }, [title, sceneId]);
 
   const contentJson = useMemo(() => {
     try {
@@ -70,10 +79,28 @@ export function SceneEditor({
     [novelId, sceneId, onSaved],
   );
 
+  async function saveTitle(next: string) {
+    const trimmed = next.trim() || "Scene";
+    setSceneTitle(trimmed);
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "updateSceneTitle",
+        payload: { sceneId, title: trimmed },
+      }),
+    });
+    onSaved();
+  }
+
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Placeholder.configure({ placeholder: "Write the scene… or type / for AI" }),
+      Placeholder.configure({
+        placeholder: hasApiKey
+          ? "Write the scene… or type / for AI"
+          : "Write the scene…",
+      }),
     ],
     content: contentJson,
     immediatelyRender: false,
@@ -82,13 +109,19 @@ export function SceneEditor({
         class: "manuscript min-h-[12rem]",
       },
       handleKeyDown: (_view, event) => {
+        if (!hasApiKey) return false;
         if (event.key === "/" && !event.metaKey && !event.ctrlKey) {
           const { state } = _view;
           const $from = state.selection.$from;
           const textBefore = $from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc");
           if (textBefore === "" || textBefore.endsWith(" ") || textBefore.endsWith("\n")) {
             setSlashOpen(true);
+            setError("");
           }
+        }
+        if (event.key === "Escape") {
+          setSlashOpen(false);
+          setActiveCommand(null);
         }
         return false;
       },
@@ -142,10 +175,11 @@ export function SceneEditor({
   }
 
   async function runCommand() {
-    if (!activeCommand || !editor) return;
+    if (!activeCommand || !editor || !hasApiKey) return;
     setBusy(true);
     setStreaming("");
     setHunks(null);
+    setError("");
     setStatus("Generating…");
     const originalPlain = plainFromTipTap(JSON.stringify(editor.getJSON()));
     setPreRewrite(originalPlain);
@@ -207,11 +241,13 @@ export function SceneEditor({
       } else {
         setHunks(buildRewriteHunks(originalPlain, full.trim()));
       }
+      setStatus("");
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Failed");
+      setError(e instanceof Error ? e.message : "Generation failed");
+      setStatus("");
     } finally {
       setBusy(false);
-      setStatus("");
+      setStreaming("");
     }
   }
 
@@ -229,41 +265,81 @@ export function SceneEditor({
 
   return (
     <section
-      className="scroll-mt-20 border-b border-border/70 py-8"
+      className="scroll-mt-24 border-b border-border/70 py-8"
       data-scene-id={sceneId}
       data-chapter-id={chapterId}
       data-act-id={actId}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="font-serif text-xl text-muted">{title || "Scene"}</h3>
-        <button
-          type="button"
-          className="text-xs text-muted underline-offset-2 hover:underline"
-          onClick={() => void loadRevisions()}
-        >
-          History
-        </button>
+        <input
+          className="min-w-0 flex-1 bg-transparent font-serif text-xl text-muted outline-none ring-accent focus:text-text focus:ring-1"
+          value={sceneTitle}
+          aria-label="Scene title"
+          onChange={(e) => setSceneTitle(e.target.value)}
+          onBlur={(e) => void saveTitle(e.target.value)}
+        />
+        <div className="flex shrink-0 items-center gap-3">
+          {hasApiKey ? (
+            <button
+              type="button"
+              className="text-xs text-accent hover:underline"
+              onClick={() => {
+                setSlashOpen(true);
+                setError("");
+              }}
+            >
+              / AI
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="text-xs text-muted underline-offset-2 hover:underline"
+            onClick={() => void loadRevisions()}
+          >
+            History
+          </button>
+        </div>
       </div>
 
       <EditorContent editor={editor} />
 
+      {error ? (
+        <p className="mt-2 rounded-md border border-border bg-bg px-2 py-2 text-xs text-danger">
+          {error}
+        </p>
+      ) : null}
+
       {slashOpen && !activeCommand ? (
-        <div className="mt-3 rounded-md border border-border bg-surface p-2 shadow panel-enter">
-          <p className="px-2 pb-1 text-xs uppercase tracking-wide text-muted">Commands</p>
-          {commands.map((c) => (
-            <button
-              key={c.slug}
-              type="button"
-              className="block w-full rounded px-2 py-2 text-left hover:bg-accent-soft"
-              onClick={() => {
-                setActiveCommand(c);
-                setSlashOpen(false);
-              }}
-            >
-              <span className="font-medium">/{c.slug}</span>
-              <span className="ml-2 text-sm text-muted">{c.description}</span>
-            </button>
-          ))}
+        <div className="mt-3 rounded-md border border-border bg-surface p-2 panel-enter">
+          {!hasApiKey ? (
+            <p className="px-2 py-2 text-sm text-muted">
+              Add an OpenRouter key in{" "}
+              <Link href="/settings" className="text-accent hover:underline">
+                Settings
+              </Link>{" "}
+              to use slash commands.
+            </p>
+          ) : (
+            <>
+              <p className="px-2 pb-1 text-xs uppercase tracking-wide text-muted">
+                Commands
+              </p>
+              {commands.map((c) => (
+                <button
+                  key={c.slug}
+                  type="button"
+                  className="block w-full rounded px-2 py-2 text-left hover:bg-accent-soft"
+                  onClick={() => {
+                    setActiveCommand(c);
+                    setSlashOpen(false);
+                  }}
+                >
+                  <span className="font-medium">/{c.slug}</span>
+                  <span className="ml-2 text-sm text-muted">{c.description}</span>
+                </button>
+              ))}
+            </>
+          )}
           <button
             type="button"
             className="mt-1 px-2 text-xs text-muted"
@@ -277,8 +353,11 @@ export function SceneEditor({
       {activeCommand && !hunks ? (
         <div className="mt-3 rounded-md border border-border bg-surface p-3 panel-enter">
           <p className="text-sm font-medium">/{activeCommand.slug}</p>
+          <p className="mt-1 text-xs text-muted">
+            {activeCommand.description || "AI will use lore tools when helpful."}
+          </p>
           <textarea
-            className="mt-2 w-full rounded border border-border bg-bg px-2 py-2 text-sm outline-none"
+            className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-2 text-sm outline-none ring-accent focus:ring-2"
             rows={3}
             placeholder={
               activeCommand.slug === "rewrite"
@@ -289,7 +368,7 @@ export function SceneEditor({
             onChange={(e) => setInstruction(e.target.value)}
           />
           {streaming ? (
-            <div className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-bg p-2 text-sm text-muted">
+            <div className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-bg p-2 text-sm text-muted">
               {streaming}
             </div>
           ) : null}
@@ -297,17 +376,18 @@ export function SceneEditor({
             <button
               type="button"
               disabled={busy}
-              className="rounded bg-accent px-3 py-1.5 text-sm text-bg disabled:opacity-50"
+              className="rounded-md bg-accent px-3 py-1.5 text-sm text-bg disabled:opacity-50"
               onClick={() => void runCommand()}
             >
               {busy ? "Working…" : "Run"}
             </button>
             <button
               type="button"
-              className="rounded border border-border px-3 py-1.5 text-sm"
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
               onClick={() => {
                 setActiveCommand(null);
                 setStreaming("");
+                setError("");
               }}
             >
               Discard
@@ -322,7 +402,7 @@ export function SceneEditor({
             <p className="text-sm font-medium">Review rewrite</p>
             <button
               type="button"
-              className="rounded bg-accent px-2 py-1 text-xs text-bg"
+              className="rounded-md bg-accent px-2 py-1 text-xs text-bg"
               onClick={() =>
                 void applyHunks(
                   hunks.map((h) =>
@@ -335,7 +415,7 @@ export function SceneEditor({
             </button>
             <button
               type="button"
-              className="rounded border border-border px-2 py-1 text-xs"
+              className="rounded-md border border-border px-2 py-1 text-xs"
               onClick={() => {
                 setHunks(null);
                 setStreaming("");
@@ -348,7 +428,7 @@ export function SceneEditor({
             </button>
             <button
               type="button"
-              className="rounded border border-border px-2 py-1 text-xs"
+              className="rounded-md border border-border px-2 py-1 text-xs"
               onClick={() => {
                 setHunks(null);
                 void runCommand();
@@ -367,10 +447,11 @@ export function SceneEditor({
                     className="diff-new"
                     title="Accept new"
                     onClick={() =>
-                      setHunks((prev) =>
-                        prev?.map((x) =>
-                          x.id === h.id ? { ...x, accepted: "new" } : x,
-                        ) ?? null,
+                      setHunks(
+                        (prev) =>
+                          prev?.map((x) =>
+                            x.id === h.id ? { ...x, accepted: "new" } : x,
+                          ) ?? null,
                       )
                     }
                   >
@@ -381,10 +462,11 @@ export function SceneEditor({
                       className="diff-original"
                       title="Keep original"
                       onClick={() =>
-                        setHunks((prev) =>
-                          prev?.map((x) =>
-                            x.id === h.id ? { ...x, accepted: "original" } : x,
-                          ) ?? null,
+                        setHunks(
+                          (prev) =>
+                            prev?.map((x) =>
+                              x.id === h.id ? { ...x, accepted: "original" } : x,
+                            ) ?? null,
                         )
                       }
                     >
@@ -397,7 +479,7 @@ export function SceneEditor({
           </div>
           <button
             type="button"
-            className="mt-3 rounded bg-accent px-3 py-1.5 text-sm text-bg"
+            className="mt-3 rounded-md bg-accent px-3 py-1.5 text-sm text-bg"
             onClick={() => void applyHunks(hunks)}
           >
             Apply decisions
@@ -406,14 +488,17 @@ export function SceneEditor({
       ) : null}
 
       {showHistory ? (
-        <div className="mt-3 rounded border border-border bg-surface p-3 text-sm">
+        <div className="mt-3 rounded-md border border-border bg-surface p-3 text-sm panel-enter">
           <div className="mb-2 flex justify-between">
             <p className="font-medium">Revisions</p>
-            <button type="button" onClick={() => setShowHistory(false)}>
+            <button type="button" className="text-xs text-muted" onClick={() => setShowHistory(false)}>
               Close
             </button>
           </div>
           <ul className="space-y-2">
+            {revisions.length === 0 ? (
+              <li className="text-muted">No revisions yet.</li>
+            ) : null}
             {revisions.map((r) => (
               <li key={r.id} className="flex items-center justify-between gap-2">
                 <span className="text-muted">

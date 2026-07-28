@@ -47,6 +47,16 @@ function answerMap(answers: OverviewAnswer[]): Record<string, string> {
   return Object.fromEntries(answers.map((a) => [a.questionId, a.answer]));
 }
 
+/** Last stretch of existing prose so the model can match voice and continue cleanly. */
+export function buildVoiceAnchor(currentScene: string, previousScene = "", maxChars = 900): string {
+  const source = currentScene.trim() || previousScene.trim();
+  if (!source) return "(empty - establish voice from instructions and codex)";
+  if (source.length <= maxChars) return source;
+  const slice = source.slice(-maxChars);
+  const cut = slice.indexOf(" ") >= 0 ? slice.slice(slice.indexOf(" ") + 1) : slice;
+  return `...${cut}`;
+}
+
 /** Glossary block for prose prompts from the novel knowledge base. */
 export function buildCodex(entries: KnowledgeEntry[]): string {
   if (entries.length === 0) return "(empty)";
@@ -67,7 +77,10 @@ export function buildOutlineXml(tree: NovelTree): string {
       const chapters = act.chapters
         .map((ch, ci) => {
           const beatLines = ch.beats
-            .map((b) => `          ${escapeXml(b.content.trim() || "(empty beat)")}`)
+            .map(
+              (b, bi) =>
+                `          <beat n="${bi + 1}">${escapeXml(b.content.trim() || "(empty beat)")}</beat>`,
+            )
             .join("\n");
           const sceneLines = ch.scenes
             .map(
@@ -109,9 +122,11 @@ export function buildSceneInstructions(opts: {
   userInstruction: string;
   answers: OverviewAnswer[];
   sceneTitle?: string | null;
+  hasExistingProse?: boolean;
 }): string {
   const answers = answerMap(opts.answers);
   const pov = (answers["novel.pov_tense"] ?? "").trim();
+  const genreToneLine = (answers["novel.genre_tone"] ?? "").trim();
   const povAttr = pov
     ? escapeXml(pov.split(/[.;\n]/)[0]?.trim() || pov)
     : "follow established scene voice";
@@ -119,22 +134,28 @@ export function buildSceneInstructions(opts: {
   const beatLines = opts.chapterBeats
     .map((b) => b.content.trim())
     .filter(Boolean)
-    .map((line) => `        ${escapeXml(line)}`)
+    .map((line, i) => `        ${i + 1}. ${escapeXml(line)}`)
     .join("\n");
 
   const instructionExtra = opts.userInstruction.trim()
-    ? `\n${escapeXml(opts.userInstruction.trim())}`
+    ? `\n        Author notes: ${escapeXml(opts.userInstruction.trim())}`
     : "";
 
   const titleHint = opts.sceneTitle?.trim()
     ? `\n        Scene focus: ${escapeXml(opts.sceneTitle.trim())}`
     : "";
 
+  const continueHint = opts.hasExistingProse
+    ? `\n        Continuation rule: Existing prose is already on the page. Do not restart. Skip beats already dramatized; write only what is still missing, in order.`
+    : `\n        Opening rule: Establish viewpoint and situation through dramatized action, not synopsis.`;
+
   return `<instructions>
 <pointOfView note="${povAttr}"/>
-${pov ? `        POV/tense constraints: ${escapeXml(pov)}\n` : ""}${titleHint}
-        Beats
-${beatLines || "        (no beats listed - follow the user instruction only)"}
+${pov ? `        POV/tense constraints: ${escapeXml(pov)}\n` : ""}${
+    genreToneLine ? `        Genre/tone: ${escapeXml(genreToneLine)}\n` : ""
+  }${titleHint}${continueHint}
+        Beats (execute in order; stop when these are covered)
+${beatLines || "        (no beats listed - follow the author notes only)"}
 ${instructionExtra}
 </instructions>`;
 }
@@ -144,13 +165,16 @@ export function buildNovelMeta(tree: NovelTree, answers: OverviewAnswer[]): stri
   const lines = [
     `Title: ${tree.novel.title}`,
     tree.novel.premise && `Premise: ${tree.novel.premise}`,
+    map["novel.premise"] && !tree.novel.premise && `Premise: ${map["novel.premise"]}`,
     tree.novel.genre && `Genre: ${tree.novel.genre}`,
     tree.novel.tone && `Tone: ${tree.novel.tone}`,
     tree.novel.themes && `Themes: ${tree.novel.themes}`,
     tree.novel.stakes && `Stakes: ${tree.novel.stakes}`,
     tree.novel.protagonistFocus && `Protagonist: ${tree.novel.protagonistFocus}`,
+    map["novel.protagonist"] && `Protagonist notes: ${map["novel.protagonist"]}`,
     map["novel.pov_tense"] && `POV/tense: ${map["novel.pov_tense"]}`,
     map["novel.genre_tone"] && `Genre/tone notes: ${map["novel.genre_tone"]}`,
+    map["novel.theme"] && `Thematic questions: ${map["novel.theme"]}`,
   ].filter(Boolean);
   return lines.join("\n");
 }
