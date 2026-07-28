@@ -122,6 +122,11 @@ select {
   animation: rise 280ms ease both;
 }
 
+.ledger-rail-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
 @keyframes rise {
   from {
     opacity: 0;

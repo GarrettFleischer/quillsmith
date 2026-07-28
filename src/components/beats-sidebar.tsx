@@ -79,13 +79,13 @@ export function BeatsSidebar({
 
   return (
     <aside
-      className={`flex h-full w-[260px] shrink-0 flex-col border-l border-border bg-surface/70 ${className ?? ""}`}
+      className={`flex h-full min-h-0 w-[260px] shrink-0 flex-col border-l border-border bg-surface/70 ${className ?? ""}`}
     >
       <div className="border-b border-border px-3 py-3">
         <h2 className="font-serif text-lg">Beats</h2>
         <p className="mt-1 text-xs text-muted">{chapterTitle}</p>
       </div>
-      <ul className="flex-1 space-y-2 overflow-auto p-3">
+      <ul className="min-h-0 flex-1 space-y-2 overflow-auto p-3">
         {items.map((b, i) => (
           <li key={b.id} className="rounded-md border border-border bg-bg p-2">
             <textarea
@@ -100,13 +100,25 @@ export function BeatsSidebar({
               onBlur={(e) => void saveBeat(b.id, e.target.value)}
             />
             <div className="mt-1 flex gap-2 text-xs text-muted">
-              <button type="button" onClick={() => void move(i, -1)}>
+              <button
+                type="button"
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                onClick={() => void move(i, -1)}
+              >
                 Up
               </button>
-              <button type="button" onClick={() => void move(i, 1)}>
+              <button
+                type="button"
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                onClick={() => void move(i, 1)}
+              >
                 Down
               </button>
-              <button type="button" className="text-danger" onClick={() => void removeBeat(b.id)}>
+              <button
+                type="button"
+                className="text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                onClick={() => void removeBeat(b.id)}
+              >
                 Delete
               </button>
             </div>

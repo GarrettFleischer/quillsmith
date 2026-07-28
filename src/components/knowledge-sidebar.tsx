@@ -108,7 +108,7 @@ export function KnowledgeSidebar({
 
   return (
     <aside
-      className={`flex h-full w-[280px] shrink-0 flex-col border-r border-border bg-surface/70 panel-enter ${className ?? ""}`}
+      className={`flex h-full min-h-0 w-[280px] shrink-0 flex-col border-r border-border bg-surface/70 panel-enter ${className ?? ""}`}
     >
       <div className="border-b border-border px-3 py-3">
         <div className="flex items-center justify-between gap-2">
@@ -116,7 +116,7 @@ export function KnowledgeSidebar({
           {onCollapse ? (
             <button
               type="button"
-              className="text-xs text-muted hover:text-text hover:underline"
+              className="text-xs text-muted hover:text-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={onCollapse}
             >
               Hide
@@ -124,14 +124,21 @@ export function KnowledgeSidebar({
           ) : null}
         </div>
         <input
-          className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-1 text-sm"
+          className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           placeholder="Search…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
       </div>
-      <div className="flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto">
         <ul className="p-2">
+          {filtered.length === 0 ? (
+            <li className="px-2 py-4 text-sm text-muted">
+              {entries.length === 0
+                ? "No lore entries yet — add characters and places as you draft."
+                : "No matches for that search."}
+            </li>
+          ) : null}
           {filtered.map((e) => (
             <li key={e.id}>
               <button
@@ -146,7 +153,7 @@ export function KnowledgeSidebar({
                     notes: e.notes ?? "",
                   });
                 }}
-                className={`w-full rounded px-2 py-2 text-left text-sm ${
+                className={`w-full rounded px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
                   selected === e.id ? "bg-accent-soft text-accent" : "hover:bg-surface-2"
                 }`}
               >

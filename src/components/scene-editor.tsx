@@ -22,6 +22,7 @@ export function SceneEditor({
   commands,
   model,
   hasApiKey = true,
+  isActive = false,
   onSaved,
 }: {
   novelId: string;
@@ -33,6 +34,7 @@ export function SceneEditor({
   commands: Command[];
   model: string;
   hasApiKey?: boolean;
+  isActive?: boolean;
   onSaved: () => void;
 }) {
   const setActive = useEditorStore((s) => s.setActive);
@@ -265,7 +267,9 @@ export function SceneEditor({
 
   return (
     <section
-      className="scroll-mt-24 border-b border-border/70 py-8"
+      className={`scroll-mt-36 border-b border-border/70 py-8 ${
+        isActive ? "-mx-2 rounded-lg bg-surface/20 px-2" : ""
+      }`}
       data-scene-id={sceneId}
       data-chapter-id={chapterId}
       data-act-id={actId}
@@ -282,7 +286,7 @@ export function SceneEditor({
           {hasApiKey ? (
             <button
               type="button"
-              className="text-xs text-accent hover:underline"
+              className="text-xs text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={() => {
                 setSlashOpen(true);
                 setError("");
@@ -293,7 +297,7 @@ export function SceneEditor({
           ) : null}
           <button
             type="button"
-            className="text-xs text-muted underline-offset-2 hover:underline"
+            className="text-xs text-muted underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             onClick={() => void loadRevisions()}
           >
             History
@@ -328,7 +332,7 @@ export function SceneEditor({
                 <button
                   key={c.slug}
                   type="button"
-                  className="block w-full rounded px-2 py-2 text-left hover:bg-accent-soft"
+                  className="block w-full rounded px-2 py-2 text-left hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
                   onClick={() => {
                     setActiveCommand(c);
                     setSlashOpen(false);
