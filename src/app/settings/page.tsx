@@ -107,7 +107,8 @@ export default function SettingsPage() {
                   label: "Custom",
                   description: "",
                   defaultTemperature: 0.7,
-                  promptTemplate: "Instruction: {{userInstruction}}\n\nScene:\n{{currentScene}}",
+                  promptTemplate:
+                    "Instruction: {{userInstruction}}\n\nScene:\n{{currentScene}}\n\nCodex:\n{{codex}}",
                   enableTools: "true",
                   builtIn: false,
                 })
@@ -116,6 +117,15 @@ export default function SettingsPage() {
               Add command
             </button>
           </div>
+          <p className="mt-2 text-sm text-muted">
+            Built-in Expand/Rewrite templates sync from the app on startup (craft rules live in the
+            system prompt). Fork a custom command if you need a permanent personal template.
+            Placeholders: {"{{codex}}"}, {"{{taskLead}}"}, {"{{sceneInstructions}}"},{" "}
+            {"{{novelMeta}}"}, {"{{outline}}"}, {"{{actTitle}}"}, {"{{chapterTitle}}"},{" "}
+            {"{{chapterGoal}}"}, {"{{chapterBeats}}"}, {"{{previousScene}}"}, {"{{currentScene}}"},{" "}
+            {"{{nextScene}}"}, {"{{knowledge}}"}, {"{{userInstruction}}"}, {"{{novelPremise}}"},{" "}
+            {"{{actBrief}}"}, {"{{chapterText}}"}.
+          </p>
           <ul className="mt-4 space-y-2">
             {commands.map((c) => (
               <li

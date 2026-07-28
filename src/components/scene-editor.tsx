@@ -280,7 +280,11 @@ export function SceneEditor({
           <textarea
             className="mt-2 w-full rounded border border-border bg-bg px-2 py-2 text-sm outline-none"
             rows={3}
-            placeholder="Further instructions…"
+            placeholder={
+              activeCommand.slug === "rewrite"
+                ? 'Target length, e.g. "400 words" or "cut by about a third"'
+                : 'Optional notes, e.g. "600 words" or "stay in Elena\'s POV"'
+            }
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
           />

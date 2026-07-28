@@ -6,6 +6,7 @@ import {
   listOverviewAnswers,
   listOverviewMessages,
 } from "@/lib/novels";
+import { OVERVIEW_SYSTEM_EXTRA } from "@/lib/prompts/rules";
 import { runAgentLoop, sseEncode, type ChatMessage } from "@/lib/openrouter";
 import { OVERVIEW_TOOLS } from "@/lib/tools";
 
@@ -32,10 +33,14 @@ export async function POST(req: Request) {
     const answers = listOverviewAnswers(body.novelId);
 
     const system = `You are Quillsmith's Overview helper. You help the author fill and audit a top-down outline.
-Hierarchy: Novel → Acts (arc briefs) → Chapters (act milestones) → Beats (chapter detail outline). Scenes are prose under chapters and are siblings of beats — NEVER nest scenes under beats, and NEVER write scene prose.
+Hierarchy: Novel → Acts (arc briefs) → Chapters (act milestones) → Beats (chapter detail outline). Scenes are prose under chapters and are siblings of beats - NEVER nest scenes under beats, and NEVER write scene prose.
 Modes: Fill unanswered question-bank items; Review for coherence.
 Use tools to read/write outline structure and set_overview_answer for question ids.
 Confirm material structural changes in chat, then apply via tools.
+Keep replies concise and practical. No motivational fluff.
+
+${OVERVIEW_SYSTEM_EXTRA}
+
 Question bank:
 ${QUESTION_BANK.map((q) => `- ${q.id}: ${q.prompt}`).join("\n")}
 Coherence checks:

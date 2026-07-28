@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { knowledgeAppearances, knowledgeEntries } from "@/db/schema";
 import { getSettings, upsertKnowledge } from "@/lib/novels";
+import { SUMMARY_SYSTEM_PROMPT } from "@/lib/prompts/rules";
 import { runAgentLoop, type ChatMessage } from "@/lib/openrouter";
 
 export const runtime = "nodejs";
@@ -34,8 +35,7 @@ export async function POST(req: Request) {
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content:
-          "Update the existing knowledge summary incorporating new facts from appearance contexts. Do not invent. Preserve stable identity. Return only the updated summary paragraph(s).",
+        content: SUMMARY_SYSTEM_PROMPT,
       },
       {
         role: "user",

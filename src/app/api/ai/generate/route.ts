@@ -4,11 +4,20 @@ import { acts, beats, chapters, scenes } from "@/db/schema";
 import {
   getCommand,
   getCommandOverride,
-  getNovel,
+  getNovelTree,
   getSettings,
+  listKnowledge,
+  listOverviewAnswers,
 } from "@/lib/novels";
 import { knowledgeForSceneText } from "@/lib/mentions";
 import { compileTemplate } from "@/lib/prompt";
+import {
+  buildCodex,
+  buildNovelMeta,
+  buildOutlineXml,
+  buildSceneInstructions,
+} from "@/lib/prompts/context";
+import { PROSE_SYSTEM_PROMPT, REWRITE_SYSTEM_PROMPT } from "@/lib/prompts/rules";
 import { runAgentLoop, sseEncode, type ChatMessage } from "@/lib/openrouter";
 import { PROSE_TOOLS } from "@/lib/tools";
 import { plainFromTipTap } from "@/lib/utils";
@@ -23,6 +32,7 @@ export async function POST(req: Request) {
       sceneId: string;
       instruction: string;
       model?: string;
+      wordTarget?: number;
     };
 
     const settings = getSettings();
@@ -35,12 +45,14 @@ export async function POST(req: Request) {
     const override = getCommandOverride(command.id, model);
     const temperature = override?.temperature ?? command.defaultTemperature;
     const template = override?.promptTemplate || command.promptTemplate;
-    const enableTools = (override ? true : command.enableTools !== "false");
+    const enableTools = command.enableTools !== "false";
+    const isRewrite = body.commandSlug === "rewrite";
+    const isExpand = body.commandSlug === "expand";
 
     const db = getDb();
-    const novel = getNovel(body.novelId);
+    const tree = getNovelTree(body.novelId);
     const scene = db.select().from(scenes).where(eq(scenes.id, body.sceneId)).get();
-    if (!novel || !scene) {
+    if (!tree || !scene) {
       return Response.json({ error: "Novel or scene not found" }, { status: 404 });
     }
 
@@ -64,14 +76,57 @@ export async function POST(req: Request) {
 
     const currentPlain = plainFromTipTap(scene.content);
     const kb = knowledgeForSceneText(body.novelId, currentPlain + " " + body.instruction);
+    const answers = listOverviewAnswers(body.novelId);
+    const allKnowledge = listKnowledge(body.novelId);
+
+    const parsedWords =
+      typeof body.wordTarget === "number" && body.wordTarget > 0
+        ? body.wordTarget
+        : (() => {
+            const m = body.instruction.match(/\b(\d{2,5})\s*words?\b/i);
+            return m ? Number(m[1]) : undefined;
+          })();
+    const wordTarget =
+      typeof parsedWords === "number" && Number.isFinite(parsedWords) && parsedWords > 0
+        ? parsedWords
+        : undefined;
+    const lengthInstructions = (() => {
+      const trimmed = body.instruction.trim();
+      if (wordTarget && trimmed && !/\b\d{2,5}\s*words?\b/i.test(trimmed)) {
+        return `${wordTarget} words. ${trimmed}`;
+      }
+      if (wordTarget) return `${wordTarget} words`;
+      if (trimmed) return trimmed;
+      return "noticeably shorter while preserving all meaning";
+    })();
+    const taskLead = isExpand
+      ? wordTarget
+        ? `Write about ${wordTarget} words that continue the story, using the following instructions:`
+        : `Continue the story using the following instructions (stop once the beats are covered; a modest length is better than padding):`
+      : wordTarget
+        ? `Rewrite the current scene in about ${wordTarget} words, using the following instructions:`
+        : `Rewrite the current scene using the following instructions:`;
+
     const bag = {
       userInstruction: body.instruction,
+      lengthInstructions,
+      taskLead,
+      sceneInstructions: buildSceneInstructions({
+        chapterBeats,
+        userInstruction: body.instruction,
+        answers,
+        sceneTitle: scene.title,
+      }),
+      codex: buildCodex(allKnowledge),
+      outline: buildOutlineXml(tree),
+      novelMeta: buildNovelMeta(tree, answers),
       currentScene: currentPlain,
       previousScene: prev ? plainFromTipTap(prev.content) : "",
       nextScene: next ? plainFromTipTap(next.content) : "",
       chapterText: siblingScenes.map((s) => plainFromTipTap(s.content)).join("\n\n"),
       chapterBeats: chapterBeats.map((b, i) => `${i + 1}. ${b.content}`).join("\n"),
       chapterGoal: chapter.goal ?? "",
+      chapterTitle: chapter.title,
       actTitle: act.title,
       actBrief: [
         act.brief,
@@ -81,19 +136,18 @@ export async function POST(req: Request) {
       ]
         .filter(Boolean)
         .join("\n"),
-      novelPremise: novel.premise ?? "",
+      novelPremise: tree.novel.premise ?? "",
       knowledge: kb
         .map((e) => `- ${e.name} (${e.type}): ${e.summary}`)
         .join("\n"),
     };
 
     const prompt = compileTemplate(template, bag);
+    const systemPrompt = isRewrite
+      ? compileTemplate(REWRITE_SYSTEM_PROMPT, { lengthInstructions })
+      : PROSE_SYSTEM_PROMPT;
     const messages: ChatMessage[] = [
-      {
-        role: "system",
-        content:
-          "You are Quillsmith's prose assistant. Prefer tools when lore or prior drafts may help. Final answer must be story prose only.",
-      },
+      { role: "system", content: systemPrompt },
       { role: "user", content: prompt },
     ];
 

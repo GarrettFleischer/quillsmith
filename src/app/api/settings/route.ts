@@ -36,14 +36,22 @@ export async function PATCH(req: Request) {
       enableTools?: string;
     };
     if (p.id) {
+      const existing = db.select().from(slashCommands).where(eq(slashCommands.id, p.id)).get();
+      const forkingBuiltin = Boolean(existing?.builtIn);
+      const nextSlug =
+        forkingBuiltin && (p.slug === "expand" || p.slug === "rewrite")
+          ? `${p.slug}-custom`
+          : p.slug;
       db.update(slashCommands)
         .set({
-          slug: p.slug,
+          slug: nextSlug,
           label: p.label,
           description: p.description,
           defaultTemperature: p.defaultTemperature,
           promptTemplate: p.promptTemplate,
           enableTools: p.enableTools ?? "true",
+          // Editing a built-in forks it so app prompt sync won't overwrite custom work.
+          builtIn: false,
         })
         .where(eq(slashCommands.id, p.id))
         .run();

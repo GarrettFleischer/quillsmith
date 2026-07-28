@@ -37,7 +37,10 @@ export default function RootLayout({
     >
       <body className="min-h-full antialiased">
         <Providers>{children}</Providers>
-      </body>
+      {/* impeccable-live-start */}
+<script src="http://localhost:8400/live.js?token=8de7fba8-42d8-4da5-8069-fedacad89df3"></script>
+{/* impeccable-live-end */}
+</body>
     </html>
   );
 }
