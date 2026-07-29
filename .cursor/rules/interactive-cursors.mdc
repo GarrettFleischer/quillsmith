@@ -1,0 +1,61 @@
+---
+description: Set correct mouse cursors on interactive UI elements (Tailwind)
+globs: **/*.{tsx,jsx,css}
+alwaysApply: false
+---
+
+# Interactive cursors
+
+Tailwind Preflight sets `cursor: default` on `<button>`. Without an explicit cursor class, buttons and custom click targets often show the arrow instead of a hand — a common polish miss.
+
+## Required classes
+
+| Element | Cursor class |
+|---------|----------------|
+| `<button>`, clickable controls, tabs, icon buttons | `cursor-pointer` |
+| `<a href="...">` | `cursor-pointer` (verify; add if missing) |
+| `onClick` on non-button elements (`div`, `span`, `li`, cards) | `cursor-pointer` |
+| `disabled` or `aria-disabled` controls | `disabled:cursor-not-allowed` (keep `cursor-pointer` on enabled state) |
+| `<input>`, `<textarea>`, `<select>` | Do **not** use `cursor-pointer`; default / `cursor-text` is correct |
+| Drag handles, resize grips | `cursor-grab` / `active:cursor-grabbing` |
+| Loading but still clickable | keep `cursor-pointer`; use `disabled:cursor-not-allowed` when truly disabled |
+
+## Examples
+
+```tsx
+// ❌ Missing cursor — looks inert on hover
+<button className="rounded-md bg-accent px-3 py-1.5 text-sm text-bg">
+  Save
+</button>
+
+// ✅ Pointer on interactive; not-allowed when disabled
+<button
+  type="button"
+  disabled={busy}
+  className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-sm text-bg disabled:cursor-not-allowed disabled:opacity-50"
+>
+  {busy ? "Saving…" : "Save"}
+</button>
+
+// ❌ Div acting as button without pointer
+<div role="button" tabIndex={0} onClick={onSelect} className="rounded px-2 py-1">
+  Option
+</div>
+
+// ✅
+<div
+  role="button"
+  tabIndex={0}
+  onClick={onSelect}
+  className="cursor-pointer rounded px-2 py-1 hover:bg-surface-2"
+>
+  Option
+</div>
+```
+
+## Checklist when adding or editing UI
+
+1. Every new `<button>` or link styled as a control includes `cursor-pointer`.
+2. Disabled states use `disabled:cursor-not-allowed`.
+3. Custom click targets are never left at the default arrow cursor.
+4. Text fields and the manuscript editor are not given `cursor-pointer`.

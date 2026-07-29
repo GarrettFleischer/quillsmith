@@ -79,6 +79,26 @@ select {
   color: inherit;
 }
 
+button:not(:disabled),
+input[type="button"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+a[href],
+[role="button"]:not([aria-disabled="true"]),
+summary,
+label[for] {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+textarea:disabled,
+select:disabled,
+[disabled],
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 .manuscript {
   font-family: var(--font-serif), "Source Serif 4", Georgia, serif;
   font-size: 1.125rem;
