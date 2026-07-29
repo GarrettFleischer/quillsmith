@@ -68,31 +68,52 @@ export function SceneEditor({
 
   const persist = useCallback(
     async (json: string, source = "manual") => {
-      await fetch(`/api/novels/${novelId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "saveScene",
-          payload: { sceneId, content: json, source, scanMentions: true },
-        }),
-      });
-      onSaved();
+      try {
+        const res = await fetch(`/api/novels/${novelId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "saveScene",
+            payload: { sceneId, content: json, source, scanMentions: true },
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Save failed" }));
+          setError(err.error || "Save failed");
+          setStatus("Save failed");
+          return;
+        }
+        setError("");
+        onSaved();
+      } catch {
+        setError("Save failed");
+        setStatus("Save failed");
+      }
     },
-    [novelId, sceneId, onSaved],
+    [novelId, sceneId, onSaved, setStatus],
   );
 
   async function saveTitle(next: string) {
     const trimmed = next.trim() || "Scene";
     setSceneTitle(trimmed);
-    await fetch(`/api/novels/${novelId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "updateSceneTitle",
-        payload: { sceneId, title: trimmed },
-      }),
-    });
-    onSaved();
+    try {
+      const res = await fetch(`/api/novels/${novelId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "updateSceneTitle",
+          payload: { sceneId, title: trimmed },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Title save failed" }));
+        setError(err.error || "Title save failed");
+        return;
+      }
+      onSaved();
+    } catch {
+      setError("Title save failed");
+    }
   }
 
   const editor = useEditor({
@@ -150,8 +171,9 @@ export function SceneEditor({
         /* ignore */
       }
     }
+    // Only reset on scene switch; restore() sets content directly after history restore.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sceneId]);
+  }, [sceneId, editor]);
 
   async function loadRevisions() {
     const res = await fetch(`/api/novels/${novelId}`, {
@@ -159,12 +181,16 @@ export function SceneEditor({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "listRevisions", payload: { sceneId } }),
     });
+    if (!res.ok) {
+      setError("Could not load revisions");
+      return;
+    }
     setRevisions(await res.json());
     setShowHistory(true);
   }
 
   async function restore(revisionId: string) {
-    await fetch(`/api/novels/${novelId}`, {
+    const res = await fetch(`/api/novels/${novelId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -172,6 +198,19 @@ export function SceneEditor({
         payload: { sceneId, revisionId },
       }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Restore failed" }));
+      setError(err.error || "Restore failed");
+      return;
+    }
+    const saved = (await res.json()) as { content?: string };
+    if (editor && saved.content) {
+      try {
+        editor.commands.setContent(JSON.parse(saved.content));
+      } catch {
+        /* ignore */
+      }
+    }
     setShowHistory(false);
     onSaved();
   }
@@ -232,7 +271,9 @@ export function SceneEditor({
         }
       }
 
-      if (activeCommand.slug === "expand") {
+      const isExpand =
+        activeCommand.slug === "expand" || activeCommand.slug.startsWith("expand-");
+      if (isExpand) {
         const next = `${originalPlain.trim()}\n\n${full.trim()}`.trim();
         const json = tipTapFromPlain(next);
         editor.commands.setContent(JSON.parse(json));
@@ -364,7 +405,8 @@ export function SceneEditor({
             className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-2 text-sm outline-none ring-accent focus:ring-2"
             rows={3}
             placeholder={
-              activeCommand.slug === "rewrite"
+              activeCommand.slug === "rewrite" ||
+              activeCommand.slug.startsWith("rewrite-")
                 ? 'Target length, e.g. "400 words" or "cut by about a third"'
                 : 'Optional notes, e.g. "600 words" or "stay in Elena\'s POV"'
             }
@@ -459,7 +501,7 @@ export function SceneEditor({
                       )
                     }
                   >
-                    {h.accepted === "original" ? h.original : h.revised || "∅"}
+                    {h.accepted === "new" ? h.revised || "∅" : h.original || "∅"}
                   </span>
                   {h.original ? (
                     <span
@@ -488,6 +530,9 @@ export function SceneEditor({
           >
             Apply decisions
           </button>
+          <p className="mt-1 text-xs text-muted">
+            Undecided hunks keep the original text.
+          </p>
         </div>
       ) : null}
 

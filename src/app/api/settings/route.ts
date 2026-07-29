@@ -74,7 +74,16 @@ export async function PATCH(req: Request) {
   }
 
   if (body.action === "deleteCommand") {
-    db.delete(slashCommands).where(eq(slashCommands.id, String(body.payload.id))).run();
+    const cmd = db
+      .select()
+      .from(slashCommands)
+      .where(eq(slashCommands.id, String(body.payload.id)))
+      .get();
+    if (!cmd) return Response.json({ error: "Command not found" }, { status: 404 });
+    if (cmd.builtIn) {
+      return Response.json({ error: "Built-in commands cannot be deleted" }, { status: 400 });
+    }
+    db.delete(slashCommands).where(eq(slashCommands.id, cmd.id)).run();
     return Response.json({ ok: true });
   }
 

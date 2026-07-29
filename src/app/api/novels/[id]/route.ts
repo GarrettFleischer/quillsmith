@@ -4,6 +4,7 @@ import {
   deleteBeat,
   deleteChapter,
   getNovelTree,
+  knowledgeBelongsToNovel,
   listAppearances,
   listKnowledge,
   listOverviewAnswers,
@@ -12,6 +13,7 @@ import {
   reorderBeats,
   restoreSceneRevision,
   saveSceneContent,
+  sceneBelongsToNovel,
   updateNovelOverview,
   updateSceneTitle,
   upsertAct,
@@ -48,7 +50,8 @@ export async function PATCH(
     payload: Record<string, unknown>;
   };
 
-  switch (body.action) {
+  try {
+    switch (body.action) {
     case "updateNovel":
       return Response.json(updateNovelOverview(id, body.payload as never));
     case "upsertAct":
@@ -96,8 +99,13 @@ export async function PATCH(
           String(body.payload.title ?? "Scene"),
         ),
       );
-    case "listRevisions":
-      return Response.json(listSceneRevisions(String(body.payload.sceneId)));
+    case "listRevisions": {
+      const sceneId = String(body.payload.sceneId);
+      if (!sceneBelongsToNovel(sceneId, id)) {
+        return Response.json({ error: "Scene not found" }, { status: 404 });
+      }
+      return Response.json(listSceneRevisions(sceneId));
+    }
     case "restoreRevision":
       return Response.json(
         restoreSceneRevision(
@@ -114,10 +122,15 @@ export async function PATCH(
         }),
       );
     case "deleteKnowledge":
-      deleteKnowledge(String(body.payload.entryId));
+      deleteKnowledge(String(body.payload.entryId), id);
       return Response.json({ ok: true });
-    case "listAppearances":
-      return Response.json(listAppearances(String(body.payload.entryId)));
+    case "listAppearances": {
+      const entryId = String(body.payload.entryId);
+      if (!knowledgeBelongsToNovel(entryId, id)) {
+        return Response.json({ error: "Knowledge entry not found" }, { status: 404 });
+      }
+      return Response.json(listAppearances(entryId));
+    }
     case "scanMentions":
       return Response.json(
         scanMentionsForScene(id, String(body.payload.sceneId)),
@@ -149,5 +162,10 @@ export async function PATCH(
       );
     default:
       return Response.json({ error: "Unknown action" }, { status: 400 });
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed";
+    const notFound = /not found/i.test(message);
+    return Response.json({ error: message }, { status: notFound ? 404 : 500 });
   }
 }

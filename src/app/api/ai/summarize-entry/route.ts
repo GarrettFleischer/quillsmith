@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       .from(knowledgeEntries)
       .where(eq(knowledgeEntries.id, body.entryId))
       .get();
-    if (!entry) {
+    if (!entry || entry.novelId !== body.novelId) {
       return Response.json({ error: "Entry not found" }, { status: 404 });
     }
     const appearances = db
@@ -85,7 +85,7 @@ export async function PUT(req: Request) {
     .from(knowledgeEntries)
     .where(eq(knowledgeEntries.id, body.entryId))
     .get();
-  if (!entry) {
+  if (!entry || entry.novelId !== body.novelId) {
     return Response.json({ error: "Entry not found" }, { status: 404 });
   }
   const updated = upsertKnowledge({

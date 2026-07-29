@@ -8,6 +8,7 @@ import {
   getSettings,
   listKnowledge,
   listOverviewAnswers,
+  sceneBelongsToNovel,
 } from "@/lib/novels";
 import { knowledgeForSceneText } from "@/lib/mentions";
 import { compileTemplate } from "@/lib/prompt";
@@ -47,15 +48,17 @@ export async function POST(req: Request) {
     const temperature = override?.temperature ?? command.defaultTemperature;
     const template = override?.promptTemplate || command.promptTemplate;
     const enableTools = command.enableTools !== "false";
-    const isRewrite = body.commandSlug === "rewrite";
-    const isExpand = body.commandSlug === "expand";
+    const isRewrite =
+      body.commandSlug === "rewrite" || body.commandSlug.startsWith("rewrite-");
+    const isExpand =
+      body.commandSlug === "expand" || body.commandSlug.startsWith("expand-");
 
     const db = getDb();
     const tree = getNovelTree(body.novelId);
-    const scene = db.select().from(scenes).where(eq(scenes.id, body.sceneId)).get();
-    if (!tree || !scene) {
+    if (!tree || !sceneBelongsToNovel(body.sceneId, body.novelId)) {
       return Response.json({ error: "Novel or scene not found" }, { status: 404 });
     }
+    const scene = db.select().from(scenes).where(eq(scenes.id, body.sceneId)).get()!;
 
     const chapter = db.select().from(chapters).where(eq(chapters.id, scene.chapterId)).get()!;
     const act = db.select().from(acts).where(eq(acts.id, chapter.actId)).get()!;

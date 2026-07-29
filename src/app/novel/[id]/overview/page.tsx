@@ -112,11 +112,18 @@ export default function OverviewPage() {
   );
 
   async function patch(action: string, payload: Record<string, unknown>) {
-    await fetch(`/api/novels/${novelId}`, {
+    const res = await fetch(`/api/novels/${novelId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, payload }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Save failed" }));
+      setError(err.error || "Save failed");
+      await refresh();
+      return;
+    }
+    setError("");
     await refresh();
   }
 

@@ -63,7 +63,7 @@ export function applyHunkDecisions(hunks: DiffHunk[]): string {
   return hunks
     .map((h) => {
       if (h.type === "equal") return h.revised;
-      const choice = h.accepted ?? "new";
+      const choice = h.accepted ?? "original";
       if (choice === "original") return h.original;
       return h.revised;
     })

@@ -9,6 +9,7 @@ import {
   novels,
   overviewAnswers,
   sceneRevisions,
+  scenes,
 } from "@/db/schema";
 import {
   setOverviewAnswer,
@@ -332,7 +333,7 @@ export async function executeTool(
   switch (name) {
     case "search_knowledge": {
       const query = String(args.query ?? "");
-      const novelId = String(args.novelId ?? ctx.novelId);
+      const novelId = ctx.novelId;
       const limit = Number(args.limit ?? 10);
       const rows = db
         .select()
@@ -358,39 +359,66 @@ export async function executeTool(
     }
     case "get_knowledge_entry": {
       if (args.entryId) {
-        return db
+        return (
+          db
+            .select()
+            .from(knowledgeEntries)
+            .where(
+              and(
+                eq(knowledgeEntries.id, String(args.entryId)),
+                eq(knowledgeEntries.novelId, ctx.novelId),
+              ),
+            )
+            .get() ?? { error: "Entry not found" }
+        );
+      }
+      return (
+        db
           .select()
           .from(knowledgeEntries)
-          .where(eq(knowledgeEntries.id, String(args.entryId)))
-          .get();
-      }
-      return db
+          .where(
+            and(
+              eq(knowledgeEntries.novelId, ctx.novelId),
+              eq(knowledgeEntries.name, String(args.name ?? "")),
+            ),
+          )
+          .get() ?? { error: "Entry not found" }
+      );
+    }
+    case "get_knowledge_appearances": {
+      const entry = db
         .select()
         .from(knowledgeEntries)
         .where(
           and(
+            eq(knowledgeEntries.id, String(args.entryId)),
             eq(knowledgeEntries.novelId, ctx.novelId),
-            eq(knowledgeEntries.name, String(args.name ?? "")),
           ),
         )
         .get();
-    }
-    case "get_knowledge_appearances": {
+      if (!entry) return { error: "Entry not found" };
       const limit = Number(args.limit ?? 20);
       return db
         .select()
         .from(knowledgeAppearances)
-        .where(eq(knowledgeAppearances.entryId, String(args.entryId)))
+        .where(eq(knowledgeAppearances.entryId, entry.id))
         .orderBy(desc(knowledgeAppearances.createdAt))
         .limit(limit)
         .all();
     }
     case "get_scene_revisions": {
+      const scene = db.select().from(scenes).where(eq(scenes.id, String(args.sceneId))).get();
+      if (!scene) return { error: "Scene not found" };
+      const chapter = db.select().from(chapters).where(eq(chapters.id, scene.chapterId)).get();
+      const act = chapter
+        ? db.select().from(acts).where(eq(acts.id, chapter.actId)).get()
+        : null;
+      if (!act || act.novelId !== ctx.novelId) return { error: "Scene not found" };
       const limit = Number(args.limit ?? 5);
       const rows = db
         .select()
         .from(sceneRevisions)
-        .where(eq(sceneRevisions.sceneId, String(args.sceneId)))
+        .where(eq(sceneRevisions.sceneId, scene.id))
         .orderBy(desc(sceneRevisions.createdAt))
         .limit(limit)
         .all();
@@ -403,16 +431,26 @@ export async function executeTool(
       }));
     }
     case "get_act_brief": {
-      return db.select().from(acts).where(eq(acts.id, String(args.actId))).get();
+      const act = db.select().from(acts).where(eq(acts.id, String(args.actId))).get();
+      if (!act || act.novelId !== ctx.novelId) return { error: "Act not found" };
+      return act;
     }
     case "get_chapter_goal": {
-      return db.select().from(chapters).where(eq(chapters.id, String(args.chapterId))).get();
+      const chapter = db.select().from(chapters).where(eq(chapters.id, String(args.chapterId))).get();
+      if (!chapter) return { error: "Chapter not found" };
+      const act = db.select().from(acts).where(eq(acts.id, chapter.actId)).get();
+      if (!act || act.novelId !== ctx.novelId) return { error: "Chapter not found" };
+      return chapter;
     }
     case "get_chapter_beats": {
+      const chapter = db.select().from(chapters).where(eq(chapters.id, String(args.chapterId))).get();
+      if (!chapter) return { error: "Chapter not found" };
+      const act = db.select().from(acts).where(eq(acts.id, chapter.actId)).get();
+      if (!act || act.novelId !== ctx.novelId) return { error: "Chapter not found" };
       return db
         .select()
         .from(beats)
-        .where(eq(beats.chapterId, String(args.chapterId)))
+        .where(eq(beats.chapterId, chapter.id))
         .orderBy(asc(beats.order))
         .all();
     }

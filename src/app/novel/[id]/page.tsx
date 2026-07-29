@@ -54,6 +54,7 @@ export default function WritePage() {
   const activeChapterId = useEditorStore((s) => s.activeChapterId);
   const activeSceneId = useEditorStore((s) => s.activeSceneId);
   const setActive = useEditorStore((s) => s.setActive);
+  const setNovel = useEditorStore((s) => s.setNovel);
   const status = useEditorStore((s) => s.status);
 
   const refresh = useCallback(async () => {
@@ -66,6 +67,10 @@ export default function WritePage() {
     setLoadError("");
     setData(await res.json());
   }, [novelId]);
+
+  useEffect(() => {
+    setNovel(novelId);
+  }, [novelId, setNovel]);
 
   useEffect(() => {
     void refresh();
@@ -117,7 +122,7 @@ export default function WritePage() {
 
   const createScene = useCallback(
     async (chapterId: string) => {
-      await fetch(`/api/novels/${novelId}`, {
+      const res = await fetch(`/api/novels/${novelId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -125,6 +130,10 @@ export default function WritePage() {
           payload: { chapterId },
         }),
       });
+      if (!res.ok) {
+        setLoadError("Could not create scene.");
+        return;
+      }
       void refresh();
     },
     [novelId, refresh],

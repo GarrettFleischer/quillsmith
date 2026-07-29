@@ -157,7 +157,10 @@ export async function* runAgentLoop(opts: {
     }
   }
 
-  yield { type: "done", text: finalText };
+  yield {
+    type: "error",
+    message: `Stopped after ${maxRounds} tool rounds without a final answer. Try again with a simpler request.`,
+  };
 }
 
 export function sseEncode(event: AgentEvent) {

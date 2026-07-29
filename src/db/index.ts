@@ -10,6 +10,7 @@ const dataDir = path.join(process.cwd(), "data");
 const dbPath = path.join(dataDir, "quillsmith.db");
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+let _sqlite: BetterSqlite3.Database | null = null;
 
 export function getDb() {
   if (_db) return _db;
@@ -20,9 +21,16 @@ export function getDb() {
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   migrate(sqlite);
+  _sqlite = sqlite;
   _db = drizzle(sqlite, { schema });
   seedIfNeeded(_db);
   return _db;
+}
+
+/** Run synchronous DB work in a single SQLite transaction (rollback on throw). */
+export function withTransaction<T>(fn: () => T): T {
+  getDb();
+  return _sqlite!.transaction(fn)();
 }
 
 function migrate(sqlite: BetterSqlite3.Database) {

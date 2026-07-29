@@ -19,7 +19,13 @@ export default function HomePage() {
 
   async function refresh() {
     const res = await fetch("/api/novels");
-    setNovels(await res.json());
+    if (!res.ok) {
+      setNovels([]);
+      setLoading(false);
+      return;
+    }
+    const data = await res.json();
+    setNovels(Array.isArray(data) ? data : []);
     setLoading(false);
   }
 
@@ -33,7 +39,9 @@ export default function HomePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: title.trim() || "Untitled novel" }),
     });
+    if (!res.ok) return;
     const novel = await res.json();
+    if (!novel?.id) return;
     router.push(`/novel/${novel.id}/overview`);
   }
 

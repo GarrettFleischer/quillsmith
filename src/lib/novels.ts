@@ -93,6 +93,43 @@ export function getNovelTree(novelId: string) {
   return { novel, acts: tree };
 }
 
+function assertActInNovel(actId: string, novelId: string) {
+  const act = getDb().select().from(acts).where(eq(acts.id, actId)).get();
+  if (!act || act.novelId !== novelId) throw new Error("Act not found");
+  return act;
+}
+
+function assertChapterInNovel(chapterId: string, novelId: string) {
+  const chapter = getDb().select().from(chapters).where(eq(chapters.id, chapterId)).get();
+  if (!chapter) throw new Error("Chapter not found");
+  assertActInNovel(chapter.actId, novelId);
+  return chapter;
+}
+
+function assertSceneInNovel(sceneId: string, novelId: string) {
+  const scene = getDb().select().from(scenes).where(eq(scenes.id, sceneId)).get();
+  if (!scene) throw new Error("Scene not found");
+  assertChapterInNovel(scene.chapterId, novelId);
+  return scene;
+}
+
+function assertBeatInNovel(beatId: string, novelId: string) {
+  const beat = getDb().select().from(beats).where(eq(beats.id, beatId)).get();
+  if (!beat) throw new Error("Beat not found");
+  assertChapterInNovel(beat.chapterId, novelId);
+  return beat;
+}
+
+function assertKnowledgeInNovel(entryId: string, novelId: string) {
+  const entry = getDb()
+    .select()
+    .from(knowledgeEntries)
+    .where(eq(knowledgeEntries.id, entryId))
+    .get();
+  if (!entry || entry.novelId !== novelId) throw new Error("Knowledge entry not found");
+  return entry;
+}
+
 export function upsertAct(input: {
   id?: string;
   novelId: string;
@@ -107,6 +144,7 @@ export function upsertAct(input: {
 }) {
   const db = getDb();
   if (input.id) {
+    assertActInNovel(input.id, input.novelId);
     const patch: Record<string, unknown> = { title: input.title };
     if (input.brief !== undefined) patch.brief = input.brief;
     if (input.introduces !== undefined) patch.introduces = input.introduces;
@@ -153,7 +191,9 @@ export function upsertChapter(input: {
   goal?: string;
 }) {
   const db = getDb();
+  assertActInNovel(input.actId, input.novelId);
   if (input.id) {
+    assertChapterInNovel(input.id, input.novelId);
     const patch: Record<string, unknown> = { title: input.title };
     if (input.goal !== undefined) patch.goal = input.goal;
     if (input.order != null) patch.order = input.order;
@@ -200,7 +240,9 @@ export function upsertBeat(input: {
   order?: number;
 }) {
   const db = getDb();
+  assertChapterInNovel(input.chapterId, input.novelId);
   if (input.id) {
+    assertBeatInNovel(input.id, input.novelId);
     db.update(beats)
       .set({
         content: input.content,
@@ -231,6 +273,7 @@ export function upsertBeat(input: {
 }
 
 export function createScene(chapterId: string, novelId: string, title = "New scene") {
+  assertChapterInNovel(chapterId, novelId);
   const db = getDb();
   const max = db
     .select()
@@ -266,8 +309,7 @@ export function createScene(chapterId: string, novelId: string, title = "New sce
 
 export function updateSceneTitle(sceneId: string, novelId: string, title: string) {
   const db = getDb();
-  const existing = db.select().from(scenes).where(eq(scenes.id, sceneId)).get();
-  if (!existing) throw new Error("Scene not found");
+  assertSceneInNovel(sceneId, novelId);
   db.update(scenes)
     .set({ title, updatedAt: now() })
     .where(eq(scenes.id, sceneId))
@@ -284,8 +326,7 @@ export function saveSceneContent(
   label?: string,
 ) {
   const db = getDb();
-  const existing = db.select().from(scenes).where(eq(scenes.id, sceneId)).get();
-  if (!existing) throw new Error("Scene not found");
+  const existing = assertSceneInNovel(sceneId, novelId);
   if (existing.content === content) return existing;
 
   db.update(scenes)
@@ -398,6 +439,7 @@ export function upsertKnowledge(input: {
 }) {
   const db = getDb();
   if (input.id) {
+    assertKnowledgeInNovel(input.id, input.novelId);
     db.update(knowledgeEntries)
       .set({
         type: input.type,
@@ -427,8 +469,17 @@ export function upsertKnowledge(input: {
   return db.select().from(knowledgeEntries).where(eq(knowledgeEntries.id, entryId)).get()!;
 }
 
-export function deleteKnowledge(entryId: string) {
+export function deleteKnowledge(entryId: string, novelId?: string) {
+  if (novelId) assertKnowledgeInNovel(entryId, novelId);
   getDb().delete(knowledgeEntries).where(eq(knowledgeEntries.id, entryId)).run();
+}
+
+export function clearKnowledge(novelId: string) {
+  getDb().delete(knowledgeEntries).where(eq(knowledgeEntries.novelId, novelId)).run();
+}
+
+export function clearOverviewAnswers(novelId: string) {
+  getDb().delete(overviewAnswers).where(eq(overviewAnswers.novelId, novelId)).run();
 }
 
 export function listAppearances(entryId: string) {
@@ -507,22 +558,29 @@ export function updateNovelOverview(
 }
 
 export function deleteAct(actId: string, novelId: string) {
+  assertActInNovel(actId, novelId);
   getDb().delete(acts).where(eq(acts.id, actId)).run();
   touchNovel(novelId);
 }
 
 export function deleteChapter(chapterId: string, novelId: string) {
+  assertChapterInNovel(chapterId, novelId);
   getDb().delete(chapters).where(eq(chapters.id, chapterId)).run();
   touchNovel(novelId);
 }
 
 export function deleteBeat(beatId: string, novelId: string) {
+  assertBeatInNovel(beatId, novelId);
   getDb().delete(beats).where(eq(beats.id, beatId)).run();
   touchNovel(novelId);
 }
 
 export function reorderBeats(chapterId: string, orderedIds: string[], novelId: string) {
+  assertChapterInNovel(chapterId, novelId);
   const db = getDb();
+  for (const beatId of orderedIds) {
+    assertBeatInNovel(beatId, novelId);
+  }
   orderedIds.forEach((beatId, index) => {
     db.update(beats).set({ order: index }).where(eq(beats.id, beatId)).run();
   });
@@ -533,4 +591,22 @@ export function reorderBeats(chapterId: string, orderedIds: string[], novelId: s
     .where(eq(beats.chapterId, chapterId))
     .orderBy(asc(beats.order))
     .all();
+}
+
+export function sceneBelongsToNovel(sceneId: string, novelId: string) {
+  try {
+    assertSceneInNovel(sceneId, novelId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function knowledgeBelongsToNovel(entryId: string, novelId: string) {
+  try {
+    assertKnowledgeInNovel(entryId, novelId);
+    return true;
+  } catch {
+    return false;
+  }
 }
