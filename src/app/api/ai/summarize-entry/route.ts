@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { knowledgeAppearances, knowledgeEntries } from "@/db/schema";
-import { getSettings, upsertKnowledge } from "@/lib/novels";
-import { SUMMARY_SYSTEM_PROMPT } from "@/lib/prompts/rules";
-import { runAgentLoop, type ChatMessage } from "@/lib/openrouter";
+import { systemPromptForTask } from "@/lib/ai-tasks";
+import { collectAgentText, runAgentLoop, type ChatMessage } from "@/lib/openrouter";
+import { resolveTaskRuntime } from "@/lib/task-runtime";
+import { upsertKnowledge } from "@/lib/novels";
 
 export const runtime = "nodejs";
 
@@ -29,13 +30,12 @@ export async function POST(req: Request) {
       .where(eq(knowledgeAppearances.entryId, body.entryId))
       .all();
 
-    const settings = getSettings();
-    const model = body.model || settings.defaultModel || "anthropic/claude-sonnet-4";
+    const { model, temperature } = resolveTaskRuntime("summarize_kb", body.model);
 
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: SUMMARY_SYSTEM_PROMPT,
+        content: systemPromptForTask("summarize_kb"),
       },
       {
         role: "user",
@@ -45,25 +45,20 @@ export async function POST(req: Request) {
       },
     ];
 
-    let summary = "";
-    for await (const event of runAgentLoop({
-      model,
-      temperature: 0.3,
-      messages,
-      novelId: body.novelId,
-      tools: undefined,
-    })) {
-      if (event.type === "token") summary += event.text;
-      if (event.type === "done") summary = event.text || summary;
-      if (event.type === "error") {
-        return Response.json({ error: event.message }, { status: 500 });
-      }
-    }
+    const summary = await collectAgentText(
+      runAgentLoop({
+        model,
+        temperature,
+        messages,
+        novelId: body.novelId,
+        tools: undefined,
+      }),
+    );
 
     return Response.json({
       entryId: entry.id,
       currentSummary: entry.summary,
-      proposedSummary: summary.trim(),
+      proposedSummary: summary,
     });
   } catch (e) {
     return Response.json(

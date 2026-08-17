@@ -156,9 +156,62 @@ function migrate(sqlite: BetterSqlite3.Database) {
       id INTEGER PRIMARY KEY DEFAULT 1,
       openrouter_api_key TEXT DEFAULT '',
       default_model TEXT DEFAULT 'anthropic/claude-sonnet-4',
-      theme TEXT DEFAULT 'system'
+      theme TEXT DEFAULT 'system',
+      density_thresholds_json TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS task_model_overrides (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL UNIQUE,
+      model_id TEXT NOT NULL,
+      temperature REAL
+    );
+
+    CREATE TABLE IF NOT EXISTS coach_sessions (
+      id TEXT PRIMARY KEY,
+      novel_id TEXT NOT NULL REFERENCES novels(id) ON DELETE CASCADE,
+      scene_id TEXT,
+      chapter_id TEXT,
+      task TEXT NOT NULL,
+      messages_json TEXT NOT NULL DEFAULT '[]',
+      density_json TEXT DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS comp_analyses (
+      id TEXT PRIMARY KEY,
+      novel_id TEXT NOT NULL REFERENCES novels(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      author TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      chapter_breakdown_json TEXT DEFAULT '',
+      created_at INTEGER NOT NULL
     );
   `);
+
+  ensureColumn(sqlite, "novels", "style_guide_json", "TEXT DEFAULT ''");
+  ensureColumn(sqlite, "novels", "style_samples_json", "TEXT DEFAULT '[]'");
+  ensureColumn(sqlite, "acts", "summary", "TEXT DEFAULT ''");
+  ensureColumn(sqlite, "acts", "summary_updated_at", "INTEGER");
+  ensureColumn(sqlite, "chapters", "summary", "TEXT DEFAULT ''");
+  ensureColumn(sqlite, "chapters", "summary_updated_at", "INTEGER");
+  ensureColumn(sqlite, "app_settings", "density_thresholds_json", "TEXT DEFAULT ''");
+  ensureColumn(sqlite, "novels", "slider_defs_json", "TEXT DEFAULT ''");
+  ensureColumn(sqlite, "scenes", "sliders_json", "TEXT DEFAULT '{}'");
+  ensureColumn(sqlite, "knowledge_entries", "sliders_json", "TEXT DEFAULT '{}'");
+  ensureColumn(sqlite, "app_settings", "craft_pipeline", "INTEGER NOT NULL DEFAULT 1");
+}
+
+function ensureColumn(
+  sqlite: BetterSqlite3.Database,
+  table: string,
+  column: string,
+  definition: string,
+) {
+  const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (cols.some((c) => c.name === column)) return;
+  sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 export type Db = ReturnType<typeof getDb>;

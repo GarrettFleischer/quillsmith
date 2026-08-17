@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { BeatsSidebar, type Beat } from "@/components/beats-sidebar";
+import { CoachPanel } from "@/components/coach-panel";
 import { KnowledgeSidebar, type KnowledgeEntry } from "@/components/knowledge-sidebar";
 import { SceneEditor } from "@/components/scene-editor";
+import type { DensityLevel } from "@/lib/ai-tell-density";
 import { useEditorStore } from "@/store/editor";
 
 type Tree = {
@@ -19,23 +21,26 @@ type Tree = {
       id: string;
       title: string;
       goal: string | null;
+      summary: string | null;
       beats: Beat[];
       scenes: Array<{
         id: string;
         title: string | null;
         content: string;
         chapterId: string;
+        slidersJson?: string | null;
       }>;
     }>;
   }>;
   knowledge: KnowledgeEntry[];
 };
 
-type MobilePane = "manuscript" | "knowledge" | "beats";
+type MobilePane = "manuscript" | "knowledge" | "beats" | "coach";
 
 const MOBILE_TABS: { id: MobilePane; label: string }[] = [
   { id: "manuscript", label: "Manuscript" },
   { id: "knowledge", label: "Knowledge" },
+  { id: "coach", label: "Coach" },
   { id: "beats", label: "Beats" },
 ];
 
@@ -50,6 +55,8 @@ export default function WritePage() {
   const [model, setModel] = useState("anthropic/claude-sonnet-4");
   const [hasApiKey, setHasApiKey] = useState(true);
   const [kbOpen, setKbOpen] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(true);
+  const [densityLevel, setDensityLevel] = useState<DensityLevel | null>(null);
   const [mobilePane, setMobilePane] = useState<MobilePane>("manuscript");
   const activeChapterId = useEditorStore((s) => s.activeChapterId);
   const activeSceneId = useEditorStore((s) => s.activeSceneId);
@@ -120,6 +127,15 @@ export default function WritePage() {
     return data.acts[0]?.chapters[0] ?? null;
   }, [data, activeChapterId]);
 
+  const activeScene = useMemo(() => {
+    if (!activeChapter) return null;
+    return (
+      activeChapter.scenes.find((s) => s.id === activeSceneId) ??
+      activeChapter.scenes[0] ??
+      null
+    );
+  }, [activeChapter, activeSceneId]);
+
   const createScene = useCallback(
     async (chapterId: string) => {
       const res = await fetch(`/api/novels/${novelId}`, {
@@ -177,8 +193,10 @@ export default function WritePage() {
   }
 
   const showKbDesktop = kbOpen;
+  const showCoachDesktop = coachOpen;
   const showKbMobile = mobilePane === "knowledge";
   const showBeatsMobile = mobilePane === "beats";
+  const showCoachMobile = mobilePane === "coach";
   const showManuscriptMobile = mobilePane === "manuscript";
 
   return (
@@ -261,6 +279,15 @@ export default function WritePage() {
                       {status}
                     </p>
                   ) : null}
+                  {densityLevel && densityLevel !== "low" ? (
+                    <p className="mt-2 text-xs text-muted">
+                      Last density scan:{" "}
+                      <span className={densityLevel === "high" ? "text-danger" : "text-accent"}>
+                        {densityLevel}
+                      </span>{" "}
+                      — counts, not an AI score. Open Coach → AI Tells.
+                    </p>
+                  ) : null}
                   {!hasApiKey ? (
                     <p className="mt-2 text-xs text-muted">
                       Add an OpenRouter key in{" "}
@@ -278,6 +305,13 @@ export default function WritePage() {
                     onClick={() => setKbOpen((o) => !o)}
                   >
                     {kbOpen ? "Hide knowledge" : "Show knowledge"}
+                  </button>
+                  <button
+                    type="button"
+                    className="hidden rounded-md border border-border px-2 py-1 text-xs text-muted transition hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:inline-flex"
+                    onClick={() => setCoachOpen((o) => !o)}
+                  >
+                    {coachOpen ? "Hide coach" : "Show coach"}
                   </button>
                   {chapterOptions.length > 0 ? (
                     <label className="block text-xs text-muted">
@@ -399,13 +433,88 @@ export default function WritePage() {
 
         <div
           className={`min-h-0 ${
+            showCoachMobile ? "flex w-full" : "hidden"
+          } ${showCoachDesktop ? "lg:flex lg:w-auto" : "lg:hidden"}`}
+        >
+          {showCoachDesktop || showCoachMobile ? (
+            <CoachPanel
+              key={activeChapter?.id ?? "coach"}
+              novelId={novelId}
+              sceneId={activeSceneId}
+              chapterId={activeChapter?.id ?? null}
+              chapterTitle={activeChapter?.title}
+              beats={activeChapter?.beats ?? []}
+              model={model}
+              hasApiKey={hasApiKey}
+              onCollapse={() => {
+                setCoachOpen(false);
+                setMobilePane("manuscript");
+              }}
+              onDensity={setDensityLevel}
+              sceneSlidersJson={activeScene?.slidersJson}
+              characters={(data.knowledge ?? []).filter((e) => e.type === "character")}
+              onSaveSceneSliders={(json) => {
+                if (!activeSceneId) return;
+                void fetch(`/api/novels/${novelId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    action: "updateSceneSliders",
+                    payload: { sceneId: activeSceneId, slidersJson: json },
+                  }),
+                }).then(() => void refresh());
+              }}
+              onPromoteBeat={(content) => {
+                void fetch(`/api/novels/${novelId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    action: "upsertBeat",
+                    payload: { chapterId: activeChapter?.id, content },
+                  }),
+                }).then(() => void refresh());
+              }}
+              onSyncBeats={(contents) => {
+                if (!activeChapter) return;
+                if (!confirm("Replace this chapter's beats with the reverse-outline lines?")) return;
+                void fetch(`/api/novels/${novelId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    action: "replaceBeats",
+                    payload: { chapterId: activeChapter.id, contents },
+                  }),
+                }).then(() => void refresh());
+              }}
+              className={showCoachMobile && !showCoachDesktop ? "w-full border-l-0" : undefined}
+            />
+          ) : null}
+        </div>
+
+        {!showCoachDesktop ? (
+          <div className="hidden shrink-0 flex-col border-l border-border bg-surface/70 lg:flex">
+            <button
+              type="button"
+              className="flex h-full w-10 items-center justify-center px-1 text-xs tracking-wide text-muted transition hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+              aria-label="Open coach"
+              onClick={() => setCoachOpen(true)}
+            >
+              <span className="ledger-rail-label">Coach</span>
+            </button>
+          </div>
+        ) : null}
+
+        <div
+          className={`min-h-0 ${
             showBeatsMobile ? "flex w-full" : "hidden"
           } lg:flex lg:w-auto`}
         >
           <BeatsSidebar
+            key={activeChapter?.id ?? "beats"}
             novelId={novelId}
             chapterId={activeChapter?.id ?? null}
             chapterTitle={activeChapter?.title}
+            chapterSummary={activeChapter?.summary ?? ""}
             beats={activeChapter?.beats ?? []}
             onChange={() => void refresh()}
             className={showBeatsMobile ? "w-full border-l-0" : undefined}

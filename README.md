@@ -7,7 +7,10 @@ Quillsmith is a local-first novel writing workspace. Authors structure a manuscr
 ## Features
 
 - **Top-down planning** — Acts, chapters, and beats in Overview mode, with a structured question bank and AI overview chat to flesh out premise, stakes, and arc.
-- **Scene drafting** — TipTap editor with autosave, revision history, and slash commands for AI-assisted expand/rewrite.
+- **Scene drafting** — TipTap editor with autosave, revision history, and slash commands. Expand runs the craft pipeline (curate lore, sliders, layered models, checks) unless you turn it off in Settings.
+- **Coach** — Interview, critique, practice, reverse outline, simulated beta readers, plan-then-apply checks, narrative-physics sliders, and pattern-density counts. Feedback only; you stay the author.
+- **Style guide & chapter summaries** — Document your voice; feed later chapters a story-so-far instead of the whole manuscript.
+- **Slash commands** — `/expand`, `/rewrite`, `/density`, `/scrub-*`, `/check-*` (plan then apply-only), `/layer` (multi-model pipeline).
 - **Knowledge base** — Typed lore entries (characters, places, etc.) with appearance tracking across scenes; `@` mentions pull relevant context into drafts.
 - **Lore-aware AI** — OpenRouter tool-calling loops let the model search knowledge, read outline context, and stay aligned with prior scenes.
 - **Customizable commands** — Edit slash-command prompts, temperatures, and per-model overrides in Settings.
@@ -38,8 +41,9 @@ npm run db:seed
 | Path | Purpose |
 |------|---------|
 | `src/app/novel/[id]/overview` | Top-down planning UI |
-| `src/app/novel/[id]` | Write mode — manuscript, knowledge sidebar, beats |
-| `src/app/api/ai/*` | OpenRouter generation and summarization |
+| `src/app/novel/[id]` | Write mode — manuscript, knowledge, Coach, beats |
+| `src/app/api/ai/*` | OpenRouter generation, coach, summaries, comps |
+| `src/lib/ai-tasks.ts` | Single-job AI task registry |
 | `src/lib/novels.ts` | Novel tree, scenes, knowledge CRUD |
 | `src/lib/tools.ts` | Agent tool definitions for lore-aware drafting |
 | `src/db/` | SQLite schema, migrations, seed |

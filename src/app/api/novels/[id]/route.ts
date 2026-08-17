@@ -3,22 +3,28 @@ import {
   deleteAct,
   deleteBeat,
   deleteChapter,
+  deleteComp,
   getNovelTree,
   knowledgeBelongsToNovel,
   listAppearances,
+  listCoachSessions,
+  listComps,
   listKnowledge,
   listOverviewAnswers,
   listOverviewMessages,
   listSceneRevisions,
   reorderBeats,
+  replaceChapterBeats,
   restoreSceneRevision,
   saveSceneContent,
   sceneBelongsToNovel,
   updateNovelOverview,
   updateSceneTitle,
+  updateSceneSliders,
   upsertAct,
   upsertBeat,
   upsertChapter,
+  upsertComp,
   upsertKnowledge,
   deleteKnowledge,
   setOverviewAnswer,
@@ -37,7 +43,8 @@ export async function GET(
   const knowledge = listKnowledge(id);
   const overviewMessages = listOverviewMessages(id);
   const overviewAnswers = listOverviewAnswers(id);
-  return Response.json({ ...tree, knowledge, overviewMessages, overviewAnswers });
+  const comps = listComps(id);
+  return Response.json({ ...tree, knowledge, overviewMessages, overviewAnswers, comps });
 }
 
 export async function PATCH(
@@ -99,6 +106,14 @@ export async function PATCH(
           String(body.payload.title ?? "Scene"),
         ),
       );
+    case "updateSceneSliders":
+      return Response.json(
+        updateSceneSliders(
+          String(body.payload.sceneId),
+          id,
+          String(body.payload.slidersJson ?? "{}"),
+        ),
+      );
     case "listRevisions": {
       const sceneId = String(body.payload.sceneId);
       if (!sceneBelongsToNovel(sceneId, id)) {
@@ -158,6 +173,34 @@ export async function PATCH(
           id,
           String(body.payload.questionId),
           String(body.payload.answer),
+        ),
+      );
+    case "replaceBeats":
+      return Response.json(
+        replaceChapterBeats(
+          String(body.payload.chapterId),
+          id,
+          body.payload.contents as string[],
+        ),
+      );
+    case "listComps":
+      return Response.json(listComps(id));
+    case "upsertComp":
+      return Response.json(
+        upsertComp({
+          ...(body.payload as object as Parameters<typeof upsertComp>[0]),
+          novelId: id,
+        }),
+      );
+    case "deleteComp":
+      deleteComp(String(body.payload.compId), id);
+      return Response.json({ ok: true });
+    case "listCoachSessions":
+      return Response.json(
+        listCoachSessions(
+          id,
+          body.payload.task ? String(body.payload.task) : undefined,
+          body.payload.sceneId ? String(body.payload.sceneId) : undefined,
         ),
       );
     default:

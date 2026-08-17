@@ -20,14 +20,15 @@ Three mechanisms together, not one gimmick:
 
 1. **Top-down planning that feeds drafting** — Overview mode structures the novel (acts → chapters → beats) and connects directly to Write mode scenes under each chapter.
 2. **Lore-aware AI drafting** — A per-novel knowledge base plus OpenRouter tool-calling loops keep generated prose aligned with characters, places, and prior scenes.
-3. **Local-first and private** — Manuscripts, lore, and revisions live in a local SQLite database on disk. The user brings their own OpenRouter API key; Quillsmith does not bundle model billing or cloud manuscript storage.
+3. **Craft-writer AI, not ghostwriting** — Expand runs a craft pipeline (curated scene context, narrative-physics sliders, multi-model layering, plan-then-apply checks). Coach is for inspection. The human stays in charge of thinking and art.
+4. **Local-first and private** — Manuscripts, lore, and revisions live in a local SQLite database on disk. The user brings their own OpenRouter API key; Quillsmith does not bundle model billing or cloud manuscript storage.
 
 ## Operating Context
 
 - **Home** (`/`) — Create and open novels.
-- **Overview** (`/novel/[id]/overview`) — Fill and review a top-down outline via structured question bank and AI overview chat.
-- **Write** (`/novel/[id]`) — Three-column manuscript shell: knowledge sidebar, scene editor (TipTap), beats sidebar. Slash commands trigger AI generation with revision history.
-- **Settings** (`/settings`) — OpenRouter API key, default model, customizable slash commands and prompt templates.
+- **Overview** (`/novel/[id]/overview`) — Fill and review a top-down outline via structured question bank and AI overview chat. Style guide, outline variants, comparison-book analysis, and chapter summaries live here.
+- **Write** (`/novel/[id]`) — Manuscript shell: knowledge sidebar, scene editor (TipTap), Coach panel, beats sidebar. Slash commands trigger AI generation with revision history.
+- **Settings** (`/settings`) — OpenRouter API key, default model, per-task model routing, model compare, density thresholds, customizable slash commands.
 - **Design lab** (`/design/lab`) — Internal aesthetic exploration surface for the Ink Ledger direction.
 
 Data persists in `data/quillsmith.db` (gitignored). Dev server: `npm run dev` at `http://localhost:3000`.
@@ -42,6 +43,12 @@ Data persists in `data/quillsmith.db` (gitignored). Dev server: `npm run dev` at
 - Knowledge entries (typed: character, place, etc.) with appearance tracking across scenes.
 - Overview question bank across novel / act / chapter / beat / review layers.
 - AI overview chat and prose generation via OpenRouter with configurable slash commands.
+- Per-task model routing and a small model-compare tool (BYOK).
+- Chapter/act summaries for structured AI context (story-so-far instead of dumping the manuscript).
+- Per-novel living style guide (author-approved rules injected into drafting).
+- Coach panel: interview, critique, practice, reverse outline, simulated beta readers, AI-tell scrubbers, plan-then-apply checks, narrative-physics sliders, and pattern-density counts (not an “AI score”).
+- Optional multi-model layering is the Expand path (brief → dialogue → connective prose → climax polish), then plan-then-apply checks on the new prose. Scene-scoped lore is curated per draft. Turn the pipeline off in Settings for a single-shot expand.
+- Comparison-book analysis as genre grammar — not a plot to copy.
 - Light/dark theme via `next-themes`.
 
 **Durable constraints**
@@ -55,9 +62,18 @@ Data persists in `data/quillsmith.db` (gitignored). Dev server: `npm run dev` at
 
 - *Overview* — Top-down planning mode.
 - *Write* — Scene drafting mode.
+- *Coach* — Write-mode panel for interview, critique, practice, reverse outline, beta readers, AI-tell cleanup, checks, and narrative physics. Feedback only; it does not write the manuscript.
+- *Checks* — Narrow improvement plans (adverbs, tags, logic, contrast crutches). Expand applies them to new prose automatically (change only the plan). Coach can still run them by hand.
+- *Narrative physics* — Numbered scene/character sliders injected into drafting. Expand proposes them when a scene has none.
+- *Layering* — Multi-model scene pipeline used by Expand, not only a slash command.
+- *Drafting pipeline* — Settings toggle. On: Expand curates context, sets sliders, layers models, then checks. Off: single-shot expand.
+- *Style guide* — Author-edited voice rules, approved before they affect `/expand`.
+- *Chapter summaries* — Short rollups (what happens, who is in the chapter, promises) used as distant context. Prefer these over dumping prior books.
+- *AI tell scrubbers* — Single-pattern cleanup detectors (metaphor stacking, brochure language, etc.).
+- *Pattern density* — Counts of those tells in a passage. Occasional craft techniques are fine; stacked repetition is the warning. Not detector software and not a “human %.”
 - *Knowledge base (KB)* — Per-novel story bible entries.
 - *Beats* — Chapter-level story beats in the outline.
-- *Slash commands* — User-configurable AI prompt templates invoked from the editor.
+- *Slash commands* — User-configurable AI prompt templates invoked from the editor (`/expand`, `/rewrite`, `/density`, `/scrub-*`, `/check-*`, `/layer`).
 
 **Open / undecided**
 

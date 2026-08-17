@@ -5,7 +5,9 @@ import {
   appSettings,
   beats,
   chapters,
+  coachSessions,
   commandModelOverrides,
+  compAnalyses,
   knowledgeAppearances,
   knowledgeEntries,
   novels,
@@ -14,6 +16,7 @@ import {
   sceneRevisions,
   scenes,
   slashCommands,
+  taskModelOverrides,
 } from "@/db/schema";
 import { EMPTY_DOC, id, now } from "@/lib/utils";
 
@@ -141,6 +144,7 @@ export function upsertAct(input: {
   losses?: string;
   stateStart?: string;
   stateEnd?: string;
+  summary?: string;
 }) {
   const db = getDb();
   if (input.id) {
@@ -152,6 +156,10 @@ export function upsertAct(input: {
     if (input.losses !== undefined) patch.losses = input.losses;
     if (input.stateStart !== undefined) patch.stateStart = input.stateStart;
     if (input.stateEnd !== undefined) patch.stateEnd = input.stateEnd;
+    if (input.summary !== undefined) {
+      patch.summary = input.summary;
+      patch.summaryUpdatedAt = now();
+    }
     if (input.order != null) patch.order = input.order;
     db.update(acts).set(patch).where(eq(acts.id, input.id)).run();
     touchNovel(input.novelId);
@@ -184,23 +192,29 @@ export function upsertAct(input: {
 
 export function upsertChapter(input: {
   id?: string;
-  actId: string;
+  actId?: string;
   novelId: string;
   title: string;
   order?: number;
   goal?: string;
+  summary?: string;
 }) {
   const db = getDb();
-  assertActInNovel(input.actId, input.novelId);
   if (input.id) {
     assertChapterInNovel(input.id, input.novelId);
     const patch: Record<string, unknown> = { title: input.title };
     if (input.goal !== undefined) patch.goal = input.goal;
+    if (input.summary !== undefined) {
+      patch.summary = input.summary;
+      patch.summaryUpdatedAt = now();
+    }
     if (input.order != null) patch.order = input.order;
     db.update(chapters).set(patch).where(eq(chapters.id, input.id)).run();
     touchNovel(input.novelId);
     return db.select().from(chapters).where(eq(chapters.id, input.id)).get()!;
   }
+  if (!input.actId) throw new Error("actId required to create a chapter");
+  assertActInNovel(input.actId, input.novelId);
   const max = db
     .select()
     .from(chapters)
@@ -318,6 +332,17 @@ export function updateSceneTitle(sceneId: string, novelId: string, title: string
   return db.select().from(scenes).where(eq(scenes.id, sceneId)).get()!;
 }
 
+export function updateSceneSliders(sceneId: string, novelId: string, slidersJson: string) {
+  const db = getDb();
+  assertSceneInNovel(sceneId, novelId);
+  db.update(scenes)
+    .set({ slidersJson, updatedAt: now() })
+    .where(eq(scenes.id, sceneId))
+    .run();
+  touchNovel(novelId);
+  return db.select().from(scenes).where(eq(scenes.id, sceneId)).get()!;
+}
+
 export function saveSceneContent(
   sceneId: string,
   novelId: string,
@@ -393,6 +418,8 @@ export function updateSettings(patch: Partial<{
   openrouterApiKey: string;
   defaultModel: string;
   theme: string;
+  densityThresholdsJson: string;
+  craftPipeline: boolean;
 }>) {
   getDb().update(appSettings).set(patch).where(eq(appSettings.id, 1)).run();
   return getSettings();
@@ -436,10 +463,12 @@ export function upsertKnowledge(input: {
   aliases?: string;
   summary?: string;
   notes?: string;
+  slidersJson?: string;
 }) {
   const db = getDb();
   if (input.id) {
     assertKnowledgeInNovel(input.id, input.novelId);
+    const existing = db.select().from(knowledgeEntries).where(eq(knowledgeEntries.id, input.id)).get()!;
     db.update(knowledgeEntries)
       .set({
         type: input.type,
@@ -447,6 +476,7 @@ export function upsertKnowledge(input: {
         aliases: input.aliases,
         summary: input.summary,
         notes: input.notes,
+        slidersJson: input.slidersJson ?? existing.slidersJson,
         updatedAt: now(),
       })
       .where(eq(knowledgeEntries.id, input.id))
@@ -463,6 +493,7 @@ export function upsertKnowledge(input: {
       aliases: input.aliases ?? "",
       summary: input.summary ?? "",
       notes: input.notes ?? "",
+      slidersJson: input.slidersJson ?? "{}",
       updatedAt: now(),
     })
     .run();
@@ -551,6 +582,8 @@ export function updateNovelOverview(
     endingIntention: string;
     notes: string;
     overviewChecklistJson: string;
+    styleGuideJson: string;
+    styleSamplesJson: string;
   }>,
 ) {
   getDb().update(novels).set({ ...patch, updatedAt: now() }).where(eq(novels.id, novelId)).run();
@@ -609,4 +642,192 @@ export function knowledgeBelongsToNovel(entryId: string, novelId: string) {
   } catch {
     return false;
   }
+}
+
+export function getTaskOverride(taskId: string) {
+  return getDb()
+    .select()
+    .from(taskModelOverrides)
+    .where(eq(taskModelOverrides.taskId, taskId))
+    .get();
+}
+
+export function listTaskOverrides() {
+  return getDb().select().from(taskModelOverrides).all();
+}
+
+export function upsertTaskOverride(input: {
+  taskId: string;
+  modelId: string;
+  temperature?: number | null;
+}) {
+  const db = getDb();
+  const existing = getTaskOverride(input.taskId);
+  if (existing) {
+    db.update(taskModelOverrides)
+      .set({
+        modelId: input.modelId,
+        temperature: input.temperature ?? null,
+      })
+      .where(eq(taskModelOverrides.id, existing.id))
+      .run();
+    return getTaskOverride(input.taskId)!;
+  }
+  db.insert(taskModelOverrides)
+    .values({
+      id: id(),
+      taskId: input.taskId,
+      modelId: input.modelId,
+      temperature: input.temperature ?? null,
+    })
+    .run();
+  return getTaskOverride(input.taskId)!;
+}
+
+export function replaceChapterBeats(
+  chapterId: string,
+  novelId: string,
+  contents: string[],
+) {
+  assertChapterInNovel(chapterId, novelId);
+  const db = getDb();
+  db.delete(beats).where(eq(beats.chapterId, chapterId)).run();
+  contents.forEach((content, index) => {
+    db.insert(beats)
+      .values({
+        id: id(),
+        chapterId,
+        order: index,
+        content,
+      })
+      .run();
+  });
+  touchNovel(novelId);
+  return db
+    .select()
+    .from(beats)
+    .where(eq(beats.chapterId, chapterId))
+    .orderBy(asc(beats.order))
+    .all();
+}
+
+export function listCoachSessions(novelId: string, task?: string, sceneId?: string) {
+  const db = getDb();
+  const rows = db
+    .select()
+    .from(coachSessions)
+    .where(eq(coachSessions.novelId, novelId))
+    .orderBy(desc(coachSessions.updatedAt))
+    .all();
+  return rows.filter((r) => {
+    if (task && r.task !== task) return false;
+    if (sceneId && r.sceneId !== sceneId) return false;
+    return true;
+  });
+}
+
+export function getCoachSession(sessionId: string, novelId: string) {
+  const row = getDb()
+    .select()
+    .from(coachSessions)
+    .where(eq(coachSessions.id, sessionId))
+    .get();
+  if (!row || row.novelId !== novelId) return null;
+  return row;
+}
+
+export function saveCoachSession(input: {
+  id?: string;
+  novelId: string;
+  sceneId?: string | null;
+  chapterId?: string | null;
+  task: string;
+  messagesJson: string;
+  densityJson?: string | null;
+}) {
+  const db = getDb();
+  const ts = now();
+  if (input.id) {
+    const existing = getCoachSession(input.id, input.novelId);
+    if (!existing) throw new Error("Session not found");
+    db.update(coachSessions)
+      .set({
+        messagesJson: input.messagesJson,
+        densityJson: input.densityJson ?? existing.densityJson,
+        sceneId: input.sceneId ?? existing.sceneId,
+        chapterId: input.chapterId ?? existing.chapterId,
+        updatedAt: ts,
+      })
+      .where(eq(coachSessions.id, input.id))
+      .run();
+    return getCoachSession(input.id, input.novelId)!;
+  }
+  const sessionId = id();
+  db.insert(coachSessions)
+    .values({
+      id: sessionId,
+      novelId: input.novelId,
+      sceneId: input.sceneId ?? null,
+      chapterId: input.chapterId ?? null,
+      task: input.task,
+      messagesJson: input.messagesJson,
+      densityJson: input.densityJson ?? "",
+      createdAt: ts,
+      updatedAt: ts,
+    })
+    .run();
+  return getCoachSession(sessionId, input.novelId)!;
+}
+
+export function listComps(novelId: string) {
+  return getDb()
+    .select()
+    .from(compAnalyses)
+    .where(eq(compAnalyses.novelId, novelId))
+    .orderBy(desc(compAnalyses.createdAt))
+    .all();
+}
+
+export function upsertComp(input: {
+  id?: string;
+  novelId: string;
+  title: string;
+  author?: string;
+  notes?: string;
+  chapterBreakdownJson?: string;
+}) {
+  const db = getDb();
+  if (input.id) {
+    const existing = db.select().from(compAnalyses).where(eq(compAnalyses.id, input.id)).get();
+    if (!existing || existing.novelId !== input.novelId) throw new Error("Comp not found");
+    db.update(compAnalyses)
+      .set({
+        title: input.title,
+        author: input.author ?? existing.author,
+        notes: input.notes ?? existing.notes,
+        chapterBreakdownJson: input.chapterBreakdownJson ?? existing.chapterBreakdownJson,
+      })
+      .where(eq(compAnalyses.id, input.id))
+      .run();
+    return db.select().from(compAnalyses).where(eq(compAnalyses.id, input.id)).get()!;
+  }
+  const compId = id();
+  db.insert(compAnalyses)
+    .values({
+      id: compId,
+      novelId: input.novelId,
+      title: input.title,
+      author: input.author ?? "",
+      notes: input.notes ?? "",
+      chapterBreakdownJson: input.chapterBreakdownJson ?? "",
+      createdAt: now(),
+    })
+    .run();
+  return db.select().from(compAnalyses).where(eq(compAnalyses.id, compId)).get()!;
+}
+
+export function deleteComp(compId: string, novelId: string) {
+  const existing = getDb().select().from(compAnalyses).where(eq(compAnalyses.id, compId)).get();
+  if (!existing || existing.novelId !== novelId) throw new Error("Comp not found");
+  getDb().delete(compAnalyses).where(eq(compAnalyses.id, compId)).run();
 }

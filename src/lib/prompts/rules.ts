@@ -1,3 +1,5 @@
+import { generationTellRules } from "@/lib/ai-tells";
+
 /** Shared craft + anti-ChatGPTism rules for Quillsmith fiction prompts. */
 
 export const PROSE_PERSONA = `You are an expert fiction writer drafting publishable literary prose for Quillsmith.
@@ -88,6 +90,8 @@ export const PROSE_SYSTEM_PROMPT = [
   PROSE_STOP_RULES,
   "",
   ANTI_CHATGPTISM_RULES,
+  "",
+  generationTellRules(),
   "",
   "Use tools when lore, names, or prior drafts are uncertain. After any tool use, final answer must be story prose only.",
 ].join("\n");

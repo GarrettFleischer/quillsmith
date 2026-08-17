@@ -12,6 +12,9 @@ export const novels = sqliteTable("novels", {
   endingIntention: text("ending_intention").default(""),
   notes: text("notes").default(""),
   overviewChecklistJson: text("overview_checklist_json").default("{}"),
+  styleGuideJson: text("style_guide_json").default(""),
+  styleSamplesJson: text("style_samples_json").default("[]"),
+  sliderDefsJson: text("slider_defs_json").default(""),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
@@ -29,6 +32,8 @@ export const acts = sqliteTable("acts", {
   losses: text("losses").default(""),
   stateStart: text("state_start").default(""),
   stateEnd: text("state_end").default(""),
+  summary: text("summary").default(""),
+  summaryUpdatedAt: integer("summary_updated_at", { mode: "timestamp_ms" }),
 });
 
 export const chapters = sqliteTable("chapters", {
@@ -39,6 +44,8 @@ export const chapters = sqliteTable("chapters", {
   order: integer("order").notNull(),
   title: text("title").notNull(),
   goal: text("goal").default(""),
+  summary: text("summary").default(""),
+  summaryUpdatedAt: integer("summary_updated_at", { mode: "timestamp_ms" }),
 });
 
 export const beats = sqliteTable("beats", {
@@ -58,6 +65,7 @@ export const scenes = sqliteTable("scenes", {
   order: integer("order").notNull(),
   title: text("title").default(""),
   content: text("content").notNull().default('{"type":"doc","content":[{"type":"paragraph"}]}'),
+  slidersJson: text("sliders_json").default("{}"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
 
@@ -83,6 +91,7 @@ export const knowledgeEntries = sqliteTable("knowledge_entries", {
   aliases: text("aliases").default(""),
   summary: text("summary").default(""),
   notes: text("notes").default(""),
+  slidersJson: text("sliders_json").default("{}"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
 
@@ -144,4 +153,39 @@ export const appSettings = sqliteTable("app_settings", {
   openrouterApiKey: text("openrouter_api_key").default(""),
   defaultModel: text("default_model").default("anthropic/claude-sonnet-4"),
   theme: text("theme").default("system"),
+  densityThresholdsJson: text("density_thresholds_json").default(""),
+  craftPipeline: integer("craft_pipeline", { mode: "boolean" }).notNull().default(true),
+});
+
+export const taskModelOverrides = sqliteTable("task_model_overrides", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id").notNull().unique(),
+  modelId: text("model_id").notNull(),
+  temperature: real("temperature"),
+});
+
+export const coachSessions = sqliteTable("coach_sessions", {
+  id: text("id").primaryKey(),
+  novelId: text("novel_id")
+    .notNull()
+    .references(() => novels.id, { onDelete: "cascade" }),
+  sceneId: text("scene_id"),
+  chapterId: text("chapter_id"),
+  task: text("task").notNull(),
+  messagesJson: text("messages_json").notNull().default("[]"),
+  densityJson: text("density_json").default(""),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const compAnalyses = sqliteTable("comp_analyses", {
+  id: text("id").primaryKey(),
+  novelId: text("novel_id")
+    .notNull()
+    .references(() => novels.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  author: text("author").default(""),
+  notes: text("notes").default(""),
+  chapterBreakdownJson: text("chapter_breakdown_json").default(""),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 });

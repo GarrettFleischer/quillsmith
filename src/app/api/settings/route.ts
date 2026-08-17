@@ -1,4 +1,5 @@
-import { getSettings, listCommands, updateSettings } from "@/lib/novels";
+import { getSettings, listCommands, listTaskOverrides, updateSettings, upsertTaskOverride } from "@/lib/novels";
+import { AI_TASKS } from "@/lib/ai-tasks";
 import { getDb } from "@/db";
 import { commandModelOverrides, slashCommands } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -11,6 +12,15 @@ export async function GET() {
     settings: getSettings(),
     commands: listCommands(),
     overrides: getDb().select().from(commandModelOverrides).all(),
+    taskOverrides: listTaskOverrides(),
+    tasks: AI_TASKS.map((t) => ({
+      id: t.id,
+      label: t.label,
+      description: t.description,
+      defaultModel: t.defaultModel,
+      temperature: t.temperature,
+      group: t.group,
+    })),
   });
 }
 
@@ -116,6 +126,15 @@ export async function PATCH(req: Request) {
         .run();
     }
     return Response.json(db.select().from(commandModelOverrides).all());
+  }
+
+  if (body.action === "upsertTaskOverride") {
+    const p = body.payload as {
+      taskId: string;
+      modelId: string;
+      temperature?: number | null;
+    };
+    return Response.json(upsertTaskOverride(p));
   }
 
   return Response.json({ error: "Unknown action" }, { status: 400 });

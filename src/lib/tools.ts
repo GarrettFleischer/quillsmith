@@ -521,7 +521,7 @@ export async function executeTool(
     case "upsert_chapter": {
       return upsertChapter({
         id: args.id ? String(args.id) : undefined,
-        actId: String(args.actId),
+        actId: args.actId != null ? String(args.actId) : undefined,
         novelId: ctx.novelId,
         title: String(args.title),
         goal: args.goal != null ? String(args.goal) : undefined,

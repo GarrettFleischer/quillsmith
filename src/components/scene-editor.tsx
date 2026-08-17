@@ -5,8 +5,14 @@ import Link from "next/link";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import { AgentTracePanel } from "@/components/agent-trace-panel";
 import type { DiffHunk } from "@/lib/diff";
 import { applyHunkDecisions, buildRewriteHunks } from "@/lib/diff";
+import {
+  consumeAgentStream,
+  stopAgentRun,
+  type ToolTraceEntry,
+} from "@/lib/agent-stream-client";
 import { tipTapFromPlain, plainFromTipTap } from "@/lib/utils";
 import { useEditorStore } from "@/store/editor";
 
@@ -40,15 +46,33 @@ export function SceneEditor({
   const setActive = useEditorStore((s) => s.setActive);
   const setStatus = useEditorStore((s) => s.setStatus);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runIdRef = useRef<string | null>(null);
+  const traceRef = useRef<{ thinking: string; tools: ToolTraceEntry[] }>({
+    thinking: "",
+    tools: [],
+  });
+  const discardedRef = useRef(false);
   const [sceneTitle, setSceneTitle] = useState(title || "Scene");
   const [slashOpen, setSlashOpen] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [activeCommand, setActiveCommand] = useState<Command | null>(null);
   const [streaming, setStreaming] = useState("");
+  const [feedbackText, setFeedbackText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [trace, setTrace] = useState<{ thinking: string; tools: ToolTraceEntry[] }>({
+    thinking: "",
+    tools: [],
+  });
+  const [lastTrace, setLastTrace] = useState<{
+    thinking: string;
+    tools: ToolTraceEntry[];
+  } | null>(null);
+  const [traceCollapsed, setTraceCollapsed] = useState(true);
   const [error, setError] = useState("");
   const [hunks, setHunks] = useState<DiffHunk[] | null>(null);
   const [preRewrite, setPreRewrite] = useState("");
+  const [lastPlan, setLastPlan] = useState("");
   const [revisions, setRevisions] = useState<
     Array<{ id: string; source: string; label: string | null; createdAt: string }>
   >([]);
@@ -215,12 +239,19 @@ export function SceneEditor({
     onSaved();
   }
 
-  async function runCommand() {
+  async function runCommand(opts?: { checkMode?: "plan" | "apply"; improvementPlan?: string }) {
     if (!activeCommand || !editor || !hasApiKey) return;
     setBusy(true);
     setStreaming("");
     setHunks(null);
     setError("");
+    if (opts?.checkMode !== "apply") setFeedbackText("");
+    setLastTrace(null);
+    setTrace({ thinking: "", tools: [] });
+    setTraceCollapsed(false);
+    discardedRef.current = false;
+    runIdRef.current = null;
+    setRunId(null);
     setStatus("Generating…");
     const originalPlain = plainFromTipTap(JSON.stringify(editor.getJSON()));
     setPreRewrite(originalPlain);
@@ -235,63 +266,92 @@ export function SceneEditor({
           sceneId,
           instruction,
           model,
+          checkMode: opts?.checkMode,
+          improvementPlan: opts?.improvementPlan,
         }),
       });
       if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({ error: "Failed" }));
         throw new Error(err.error || "Generation failed");
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let full = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data:")) continue;
-          const event = JSON.parse(line.slice(5).trim()) as {
-            type: string;
-            text?: string;
-            message?: string;
-            name?: string;
-          };
-          if (event.type === "token" && event.text) {
-            full += event.text;
-            setStreaming(full);
-          }
-          if (event.type === "status" && event.message) setStatus(event.message);
-          if (event.type === "tool" && event.name) setStatus(`Looking up… (${event.name})`);
-          if (event.type === "error") throw new Error(event.message);
-          if (event.type === "done") full = event.text || full;
-        }
+      const result = await consumeAgentStream(res, (state) => {
+        runIdRef.current = state.runId;
+        setRunId(state.runId);
+        setStreaming(state.output);
+        const nextTrace = { thinking: state.thinking, tools: state.tools };
+        traceRef.current = nextTrace;
+        setTrace(nextTrace);
+        if (state.status) setStatus(state.status);
+      });
+
+      if (discardedRef.current) {
+        discardedRef.current = false;
+        setStatus("");
+        return;
       }
+
+      const full = result.output;
+      setLastTrace(traceRef.current);
+      setTraceCollapsed(true);
 
       const isExpand =
         activeCommand.slug === "expand" || activeCommand.slug.startsWith("expand-");
-      if (isExpand) {
+      const isRewrite =
+        activeCommand.slug === "rewrite" || activeCommand.slug.startsWith("rewrite-");
+      const isCheck = activeCommand.slug.startsWith("check-");
+      const isLayer = activeCommand.slug === "layer";
+      const applying = opts?.checkMode === "apply";
+      const append = result.apply === "append" || (isExpand && result.apply !== "replace");
+      if (append) {
         const next = `${originalPlain.trim()}\n\n${full.trim()}`.trim();
         const json = tipTapFromPlain(next);
         editor.commands.setContent(JSON.parse(json));
-        await persist(json, "expand");
+        await persist(json, isLayer ? "layer" : "expand");
         setActiveCommand(null);
         setInstruction("");
         setStreaming("");
-      } else {
+        setLastTrace(null);
+      } else if (isRewrite || applying || isLayer) {
         setHunks(buildRewriteHunks(originalPlain, full.trim()));
+      } else {
+        setFeedbackText(full.trim());
+        if (isCheck) setLastPlan(full.trim());
       }
       setStatus("");
     } catch (e) {
+      if (discardedRef.current) {
+        discardedRef.current = false;
+        setStatus("");
+        return;
+      }
       setError(e instanceof Error ? e.message : "Generation failed");
       setStatus("");
     } finally {
       setBusy(false);
       setStreaming("");
+      runIdRef.current = null;
+      setRunId(null);
     }
+  }
+
+  async function stopCommand() {
+    const id = runIdRef.current;
+    if (id) await stopAgentRun(id);
+  }
+
+  function discardCommand() {
+    if (busy && runIdRef.current) {
+      discardedRef.current = true;
+      void stopAgentRun(runIdRef.current);
+    }
+    setActiveCommand(null);
+    setStreaming("");
+    setFeedbackText("");
+    setLastPlan("");
+    setError("");
+    setTrace({ thinking: "", tools: [] });
+    setLastTrace(null);
+    setHunks(null);
   }
 
   async function applyHunks(next: DiffHunk[]) {
@@ -304,6 +364,7 @@ export function SceneEditor({
     setStreaming("");
     setActiveCommand(null);
     setInstruction("");
+    setLastTrace(null);
   }
 
   return (
@@ -376,6 +437,7 @@ export function SceneEditor({
                   className="block w-full rounded px-2 py-2 text-left hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
                   onClick={() => {
                     setActiveCommand(c);
+                    setLastPlan("");
                     setSlashOpen(false);
                   }}
                 >
@@ -401,6 +463,29 @@ export function SceneEditor({
           <p className="mt-1 text-xs text-muted">
             {activeCommand.description || "AI will use lore tools when helpful."}
           </p>
+          {(activeCommand.slug === "density" ||
+            activeCommand.slug.startsWith("scrub-") ||
+            activeCommand.slug.startsWith("check-")) && (
+            <p className="mt-1 text-xs text-muted">
+              {activeCommand.slug.startsWith("check-")
+                ? "Plan only on Run. Apply plan changes nothing except listed items, then you review hunks."
+                : "Cleanup only — results stay in this panel. Density is a count, not an AI score."}
+            </p>
+          )}
+          {activeCommand.slug === "expand" ||
+          activeCommand.slug.startsWith("expand-") ? (
+            <p className="mt-1 text-xs text-muted">
+              Expand curates lore, sets scene sliders if needed, writes in layers, then runs
+              plan-then-apply checks on the new prose. Status will step through each pass. Turn this
+              off under Settings → Drafting pipeline for a single-shot draft.
+            </p>
+          ) : null}
+          {activeCommand.slug === "layer" ? (
+            <p className="mt-1 text-xs text-muted">
+              Same pipeline as Expand. Existing scenes append the new prose; review if you used
+              Layer with the pipeline off.
+            </p>
+          ) : null}
           <textarea
             className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-2 text-sm outline-none ring-accent focus:ring-2"
             rows={3}
@@ -413,28 +498,58 @@ export function SceneEditor({
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
           />
+          <div className="mt-2">
+            <AgentTracePanel
+              thinking={trace.thinking}
+              tools={trace.tools}
+              collapsed={false}
+              live={busy}
+            />
+          </div>
           {streaming ? (
-            <div className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-bg p-2 text-sm text-muted">
+            <div className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-bg p-2 text-sm">
               {streaming}
             </div>
           ) : null}
+          {feedbackText && !busy ? (
+            <div className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-bg p-2 text-sm">
+              {feedbackText}
+            </div>
+          ) : null}
           <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              disabled={busy}
-              className="rounded-md bg-accent px-3 py-1.5 text-sm text-bg disabled:opacity-50"
-              onClick={() => void runCommand()}
-            >
-              {busy ? "Working…" : "Run"}
-            </button>
+            {busy ? (
+              <button
+                type="button"
+                disabled={!runId}
+                className="rounded-md border border-danger px-3 py-1.5 text-sm text-danger disabled:opacity-50"
+                onClick={() => void stopCommand()}
+              >
+                Stop
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="rounded-md bg-accent px-3 py-1.5 text-sm text-bg disabled:opacity-50"
+                onClick={() => void runCommand()}
+              >
+                Run
+              </button>
+            )}
+            {activeCommand.slug.startsWith("check-") && lastPlan && !busy ? (
+              <button
+                type="button"
+                className="rounded-md border border-border px-3 py-1.5 text-sm"
+                onClick={() =>
+                  void runCommand({ checkMode: "apply", improvementPlan: lastPlan })
+                }
+              >
+                Apply plan only
+              </button>
+            ) : null}
             <button
               type="button"
               className="rounded-md border border-border px-3 py-1.5 text-sm"
-              onClick={() => {
-                setActiveCommand(null);
-                setStreaming("");
-                setError("");
-              }}
+              onClick={discardCommand}
             >
               Discard
             </button>
@@ -444,6 +559,16 @@ export function SceneEditor({
 
       {hunks ? (
         <div className="mt-4 rounded-md border border-border bg-surface p-3 panel-enter">
+          {lastTrace ? (
+            <div className="mb-3">
+              <AgentTracePanel
+                thinking={lastTrace.thinking}
+                tools={lastTrace.tools}
+                collapsed={traceCollapsed}
+                onToggle={() => setTraceCollapsed((c) => !c)}
+              />
+            </div>
+          ) : null}
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium">Review rewrite</p>
             <button
@@ -465,6 +590,7 @@ export function SceneEditor({
               onClick={() => {
                 setHunks(null);
                 setStreaming("");
+                setLastTrace(null);
                 if (editor) {
                   editor.commands.setContent(JSON.parse(tipTapFromPlain(preRewrite)));
                 }

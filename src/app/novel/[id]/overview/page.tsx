@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -11,6 +12,12 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
+import { AgentTracePanel } from "@/components/agent-trace-panel";
+import {
+  consumeAgentStream,
+  stopAgentRun,
+  type ToolTraceEntry,
+} from "@/lib/agent-stream-client";
 import {
   QUESTION_BANK,
   questionsForLayer,
@@ -23,6 +30,7 @@ type Chapter = {
   id: string;
   title: string;
   goal: string | null;
+  summary: string | null;
   beats: Beat[];
   scenes: Array<{ id: string }>;
 };
@@ -48,10 +56,19 @@ type Tree = {
     stakes: string | null;
     protagonistFocus: string | null;
     endingIntention: string | null;
+    styleGuideJson: string | null;
+    styleSamplesJson: string | null;
   };
   acts: Act[];
   overviewMessages: Array<{ id: string; role: string; content: string }>;
   overviewAnswers: Array<{ questionId: string; answer: string }>;
+  comps: Array<{
+    id: string;
+    title: string;
+    author: string | null;
+    notes: string | null;
+    chapterBreakdownJson: string | null;
+  }>;
 };
 
 const LAYER_LABELS: Record<QuestionLayer, string> = {
@@ -71,9 +88,23 @@ export default function OverviewPage() {
   const [mode, setMode] = useState<"fill" | "review">("fill");
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState("");
-  const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [trace, setTrace] = useState<{ thinking: string; tools: ToolTraceEntry[] }>({
+    thinking: "",
+    tools: [],
+  });
+  const [lastTrace, setLastTrace] = useState<{
+    thinking: string;
+    tools: ToolTraceEntry[];
+  } | null>(null);
+  const [traceCollapsed, setTraceCollapsed] = useState(true);
+  const runIdRef = useRef<string | null>(null);
+  const traceRef = useRef<{ thinking: string; tools: ToolTraceEntry[] }>({
+    thinking: "",
+    tools: [],
+  });
   const [hasApiKey, setHasApiKey] = useState(true);
   const [expandedActs, setExpandedActs] = useState<Set<string>>(new Set());
   const [confirmDeleteAct, setConfirmDeleteAct] = useState<string | null>(null);
@@ -132,7 +163,11 @@ export default function OverviewPage() {
     setBusy(true);
     setStreaming("");
     setError("");
-    setStatus("Thinking…");
+    setLastTrace(null);
+    setTrace({ thinking: "", tools: [] });
+    setTraceCollapsed(false);
+    runIdRef.current = null;
+    setRunId(null);
     try {
       const res = await fetch("/api/ai/overview-chat", {
         method: "POST",
@@ -143,44 +178,34 @@ export default function OverviewPage() {
         const err = await res.json().catch(() => ({ error: "Failed" }));
         throw new Error(err.error || "Chat failed");
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let full = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data:")) continue;
-          const event = JSON.parse(line.slice(5).trim()) as {
-            type: string;
-            text?: string;
-            message?: string;
-            name?: string;
-          };
-          if (event.type === "token" && event.text) {
-            full += event.text;
-            setStreaming(full);
-          }
-          if (event.type === "status") setStatus(event.message || "");
-          if (event.type === "tool") setStatus(`Updating outline… (${event.name})`);
-          if (event.type === "error") throw new Error(event.message);
-        }
-      }
+      const result = await consumeAgentStream(res, (state) => {
+        runIdRef.current = state.runId;
+        setRunId(state.runId);
+        setStreaming(state.output);
+        const nextTrace = { thinking: state.thinking, tools: state.tools };
+        traceRef.current = nextTrace;
+        setTrace(nextTrace);
+      });
       setInput("");
-      setStatus("");
+      setLastTrace(traceRef.current);
+      setTraceCollapsed(true);
+      if (result.output) {
+        setStreaming("");
+      }
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
-      setStatus("");
     } finally {
       setBusy(false);
       setStreaming("");
+      runIdRef.current = null;
+      setRunId(null);
     }
+  }
+
+  async function stopChat() {
+    const id = runIdRef.current;
+    if (id) await stopAgentRun(id);
   }
 
   function askQuestion(q: Question) {
@@ -263,6 +288,20 @@ export default function OverviewPage() {
               onBlur={(e) => void patch("updateNovel", { premise: e.target.value })}
             />
           </div>
+
+          <OverviewCraftPanels
+            novelId={novelId}
+            data={data}
+            hasApiKey={hasApiKey}
+            busy={busy}
+            onPatch={patch}
+            onVariants={() =>
+              void sendChat(
+                "Ignore fill/review for a moment. I want outline arrangement OPTIONS only — do not apply them. Propose 2–3 distinct spines (personal-story-first, problem-first, chronological or better fits) from the existing acts/chapters/beats.",
+              )
+            }
+            onRefresh={() => void refresh()}
+          />
 
           <div className="mb-4 flex items-center justify-between gap-3">
             <p className="text-xs uppercase tracking-[0.2em] text-muted">Structure</p>
@@ -407,31 +446,58 @@ export default function OverviewPage() {
           </div>
 
           <div className="flex-1 space-y-3 overflow-auto p-3 text-sm">
-            {data.overviewMessages.length === 0 && !streaming ? (
+            {data.overviewMessages.length === 0 && !streaming && !busy ? (
               <p className="text-sm text-muted">
                 Ask the overview helper to fill gaps or audit coherence. Click a checklist item to
                 start.
               </p>
             ) : null}
-            {data.overviewMessages.map((m) => (
-              <div
-                key={m.id}
-                className={`rounded-md p-2 panel-enter ${
-                  m.role === "user" ? "bg-accent-soft" : "border border-border bg-bg"
-                }`}
-              >
-                <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">
-                  {m.role === "user" ? "You" : "Assistant"}
-                </p>
-                <p className="whitespace-pre-wrap">{m.content}</p>
-              </div>
-            ))}
-            {streaming ? (
-              <div className="rounded-md border border-border bg-bg p-2 whitespace-pre-wrap text-muted panel-enter">
-                {streaming}
+            {(() => {
+              const lastAssistantId = [...data.overviewMessages]
+                .reverse()
+                .find((msg) => msg.role === "assistant")?.id;
+              return data.overviewMessages.map((m) => {
+                const showTrace =
+                  m.role === "assistant" && m.id === lastAssistantId && lastTrace && !busy;
+                return (
+                  <div
+                    key={m.id}
+                    className={`rounded-md p-2 panel-enter ${
+                      m.role === "user" ? "bg-accent-soft" : "border border-border bg-bg"
+                    }`}
+                  >
+                    <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">
+                      {m.role === "user" ? "You" : "Assistant"}
+                    </p>
+                    {showTrace && lastTrace ? (
+                      <div className="mb-2">
+                        <AgentTracePanel
+                          thinking={lastTrace.thinking}
+                          tools={lastTrace.tools}
+                          collapsed={traceCollapsed}
+                          onToggle={() => setTraceCollapsed((c) => !c)}
+                        />
+                      </div>
+                    ) : null}
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                  </div>
+                );
+              });
+            })()}
+            {busy ? (
+              <div className="rounded-md border border-border bg-bg p-2 panel-enter">
+                <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">Assistant</p>
+                <AgentTracePanel
+                  thinking={trace.thinking}
+                  tools={trace.tools}
+                  collapsed={false}
+                  live
+                />
+                {streaming ? (
+                  <p className="mt-2 whitespace-pre-wrap">{streaming}</p>
+                ) : null}
               </div>
             ) : null}
-            {status ? <p className="text-xs text-accent">{status}</p> : null}
             {error ? (
               <p className="rounded-md border border-border bg-bg px-2 py-2 text-xs text-danger">
                 {error}
@@ -463,14 +529,25 @@ export default function OverviewPage() {
                 }
               }}
             />
-            <button
-              type="button"
-              disabled={busy || !hasApiKey || !input.trim()}
-              className="mt-2 w-full rounded-md bg-accent py-2 text-sm text-bg disabled:opacity-50"
-              onClick={() => void sendChat(input)}
-            >
-              {busy ? "Working…" : "Send"}
-            </button>
+            {busy ? (
+              <button
+                type="button"
+                disabled={!runId}
+                className="mt-2 w-full rounded-md border border-danger py-2 text-sm text-danger disabled:opacity-50"
+                onClick={() => void stopChat()}
+              >
+                Stop
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!hasApiKey || !input.trim()}
+                className="mt-2 w-full rounded-md bg-accent py-2 text-sm text-bg disabled:opacity-50"
+                onClick={() => void sendChat(input)}
+              >
+                Send
+              </button>
+            )}
           </div>
         </aside>
       </div>
@@ -784,6 +861,40 @@ function ChapterBlock({
           )
         }
       />
+      <textarea
+        className="mt-2 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm"
+        rows={3}
+        placeholder="Chapter summary — what happens, who changes, promises to the reader"
+        value={chapter.summary ?? ""}
+        onBlur={(e) =>
+          void onPatch("upsertChapter", {
+            id: chapter.id,
+            actId,
+            title: chapter.title,
+            goal: chapter.goal,
+            summary: e.target.value,
+          })
+        }
+        onChange={(e) =>
+          setData((d) =>
+            d
+              ? {
+                  ...d,
+                  acts: d.acts.map((a) =>
+                    a.id === actId
+                      ? {
+                          ...a,
+                          chapters: a.chapters.map((c) =>
+                            c.id === chapter.id ? { ...c, summary: e.target.value } : c,
+                          ),
+                        }
+                      : a,
+                  ),
+                }
+              : d,
+          )
+        }
+      />
       <p className="mt-2 text-xs text-muted">
         Beats: {beats.length} · Scenes: {chapter.scenes.length} (siblings under chapter)
       </p>
@@ -843,5 +954,258 @@ function ChapterBlock({
         </button>
       </div>
     </li>
+  );
+}
+
+function OverviewCraftPanels({
+  novelId,
+  data,
+  hasApiKey,
+  busy,
+  onPatch,
+  onVariants,
+  onRefresh,
+}: {
+  novelId: string;
+  data: Tree;
+  hasApiKey: boolean;
+  busy: boolean;
+  onPatch: (action: string, payload: Record<string, unknown>) => Promise<void>;
+  onVariants: () => void;
+  onRefresh: () => void;
+}) {
+  const [samples, setSamples] = useState("");
+  const [guideDraft, setGuideDraft] = useState(data.novel.styleGuideJson ?? "");
+  const [styleBusy, setStyleBusy] = useState(false);
+  const [variants, setVariants] = useState("");
+  const [varBusy, setVarBusy] = useState(false);
+  const [compTitle, setCompTitle] = useState("");
+  const [compAuthor, setCompAuthor] = useState("");
+  const [compNotes, setCompNotes] = useState("");
+  const [compBusy, setCompBusy] = useState(false);
+
+  async function analyzeStyle() {
+    setStyleBusy(true);
+    try {
+      const excerpts = samples
+        .split("\n\n")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((excerpt) => ({ excerpt }));
+      const res = await fetch("/api/ai/analyze-style", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ novelId, samples: excerpts }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed");
+      setGuideDraft(JSON.stringify(json.proposed, null, 2));
+    } catch {
+      /* keep draft */
+    } finally {
+      setStyleBusy(false);
+    }
+  }
+
+  async function generateVariants() {
+    setVarBusy(true);
+    setVariants("");
+    try {
+      const res = await fetch("/api/ai/coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          task: "overview_outline_variants",
+          novelId,
+          persist: false,
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: "Failed" }));
+        throw new Error(err.error || "Failed");
+      }
+      const { readSse } = await import("@/lib/sse-client");
+      const full = await readSse(res, (event) => {
+        if (event.type === "token" && event.text) {
+          setVariants((v) => v + event.text);
+        }
+      });
+      setVariants(full);
+    } catch {
+      /* ignore */
+    } finally {
+      setVarBusy(false);
+    }
+  }
+
+  async function analyzeComp() {
+    if (!compTitle.trim()) return;
+    setCompBusy(true);
+    try {
+      await fetch("/api/ai/analyze-comp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          novelId,
+          title: compTitle,
+          author: compAuthor,
+          notes: compNotes,
+        }),
+      });
+      setCompTitle("");
+      setCompAuthor("");
+      setCompNotes("");
+      onRefresh();
+    } finally {
+      setCompBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-8 space-y-6">
+      <section className="rounded-lg border border-border bg-surface/50 p-4">
+        <h2 className="font-serif text-xl">Style guide</h2>
+        <p className="mt-1 text-xs text-muted">
+          Teach the model your voice. AI proposes rules; you edit and approve before they affect
+          drafting.
+        </p>
+        <textarea
+          className="mt-3 w-full rounded-md border border-border bg-bg px-2 py-2 text-sm"
+          rows={5}
+          placeholder="Paste 2–5 of your best passages, separated by blank lines."
+          value={samples}
+          onChange={(e) => setSamples(e.target.value)}
+        />
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!hasApiKey || styleBusy || !samples.trim()}
+            className="rounded-md bg-accent px-3 py-1.5 text-xs text-bg disabled:opacity-50"
+            onClick={() => void analyzeStyle()}
+          >
+            {styleBusy ? "Analyzing…" : "Analyze samples"}
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-border px-3 py-1.5 text-xs"
+            onClick={() => {
+              try {
+                const parsed = JSON.parse(guideDraft || "{}") as Record<string, unknown>;
+                void onPatch("updateNovel", {
+                  styleGuideJson: JSON.stringify({ ...parsed, approved: true }),
+                  styleSamplesJson: JSON.stringify(
+                    samples
+                      .split("\n\n")
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .map((excerpt) => ({ excerpt })),
+                  ),
+                });
+              } catch {
+                /* invalid JSON */
+              }
+            }}
+          >
+            Approve & save
+          </button>
+        </div>
+        <textarea
+          className="mt-3 w-full rounded-md border border-border bg-bg px-2 py-2 font-mono text-xs"
+          rows={8}
+          value={guideDraft}
+          onChange={(e) => setGuideDraft(e.target.value)}
+        />
+      </section>
+
+      <section className="rounded-lg border border-border bg-surface/50 p-4">
+        <h2 className="font-serif text-xl">Outline variants</h2>
+        <p className="mt-1 text-xs text-muted">
+          Choose among arrangements instead of staring at chaos. Nothing is applied until you ask
+          the assistant to apply an option.
+        </p>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            disabled={!hasApiKey || varBusy}
+            className="rounded-md bg-accent px-3 py-1.5 text-xs text-bg disabled:opacity-50"
+            onClick={() => void generateVariants()}
+          >
+            {varBusy ? "Drafting options…" : "Generate outline options"}
+          </button>
+          <button
+            type="button"
+            disabled={!hasApiKey || busy || !variants}
+            className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-50"
+            onClick={onVariants}
+          >
+            Ask assistant to apply a chosen option
+          </button>
+        </div>
+        {variants ? (
+          <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-bg p-2 text-xs">
+            {variants}
+          </pre>
+        ) : null}
+      </section>
+
+      <section className="rounded-lg border border-border bg-surface/50 p-4">
+        <h2 className="font-serif text-xl">Comparison books</h2>
+        <p className="mt-1 text-xs text-muted">
+          Learn the grammar of the genre. Do not copy plots — invent your own characters and
+          details.
+        </p>
+        <input
+          className="mt-3 w-full rounded-md border border-border bg-bg px-2 py-1 text-sm"
+          placeholder="Title"
+          value={compTitle}
+          onChange={(e) => setCompTitle(e.target.value)}
+        />
+        <input
+          className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-1 text-sm"
+          placeholder="Author"
+          value={compAuthor}
+          onChange={(e) => setCompAuthor(e.target.value)}
+        />
+        <textarea
+          className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-2 text-sm"
+          rows={4}
+          placeholder="Chapter notes or a short excerpt you have the right to paste…"
+          value={compNotes}
+          onChange={(e) => setCompNotes(e.target.value)}
+        />
+        <button
+          type="button"
+          disabled={!hasApiKey || compBusy || !compTitle.trim()}
+          className="mt-2 rounded-md bg-accent px-3 py-1.5 text-xs text-bg disabled:opacity-50"
+          onClick={() => void analyzeComp()}
+        >
+          {compBusy ? "Analyzing…" : "Analyze comp"}
+        </button>
+        <ul className="mt-4 space-y-3">
+          {(data.comps ?? []).map((c) => (
+            <li key={c.id} className="rounded-md border border-border bg-bg p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium">{c.title}</p>
+                  {c.author ? <p className="text-xs text-muted">{c.author}</p> : null}
+                </div>
+                <button
+                  type="button"
+                  className="text-xs text-danger hover:underline"
+                  onClick={() => void onPatch("deleteComp", { compId: c.id })}
+                >
+                  Delete
+                </button>
+              </div>
+              {c.chapterBreakdownJson ? (
+                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-muted">
+                  {c.chapterBreakdownJson}
+                </pre>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
   );
 }

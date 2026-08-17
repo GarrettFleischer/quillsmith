@@ -142,6 +142,11 @@ select:disabled,
   animation: rise 280ms ease both;
 }
 
+.agent-trace-viewport {
+  mask-image: linear-gradient(to bottom, transparent, black 1.25rem);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 1.25rem);
+}
+
 .ledger-rail-label {
   writing-mode: vertical-rl;
   transform: rotate(180deg);

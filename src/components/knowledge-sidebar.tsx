@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SliderFields } from "@/components/slider-fields";
+import { CHARACTER_SLIDERS, parseSliderMap } from "@/lib/sliders";
 
 export type KnowledgeEntry = {
   id: string;
@@ -9,6 +11,7 @@ export type KnowledgeEntry = {
   aliases: string | null;
   summary: string | null;
   notes: string | null;
+  slidersJson?: string | null;
 };
 
 export function KnowledgeSidebar({
@@ -34,6 +37,7 @@ export function KnowledgeSidebar({
     aliases: "",
     summary: "",
     notes: "",
+    sliders: {} as Record<string, number>,
   });
   const [appearances, setAppearances] = useState<
     Array<{ id: string; sceneId: string; contextSnippet: string }>
@@ -68,10 +72,18 @@ export function KnowledgeSidebar({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "upsertKnowledge",
-        payload: { id, ...draft },
+        payload: {
+          id,
+          type: draft.type,
+          name: draft.name,
+          aliases: draft.aliases,
+          summary: draft.summary,
+          notes: draft.notes,
+          slidersJson: JSON.stringify(draft.sliders),
+        },
       }),
     });
-    setDraft({ type: "character", name: "", aliases: "", summary: "", notes: "" });
+    setDraft({ type: "character", name: "", aliases: "", summary: "", notes: "", sliders: {} });
     onChange();
   }
 
@@ -151,6 +163,7 @@ export function KnowledgeSidebar({
                     aliases: e.aliases ?? "",
                     summary: e.summary ?? "",
                     notes: e.notes ?? "",
+                    sliders: parseSliderMap(e.slidersJson),
                   });
                 }}
                 className={`w-full rounded px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
@@ -199,6 +212,18 @@ export function KnowledgeSidebar({
               value={draft.summary}
               onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))}
             />
+            {draft.type === "character" ? (
+              <div className="mb-2">
+                <p className="mb-1 text-xs text-muted">Baseline sliders</p>
+                <SliderFields
+                  defs={CHARACTER_SLIDERS}
+                  values={draft.sliders}
+                  onChange={(id, value) =>
+                    setDraft((d) => ({ ...d, sliders: { ...d.sliders, [id]: value } }))
+                  }
+                />
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
