@@ -18,6 +18,8 @@ import {
   restoreSceneRevision,
   saveSceneContent,
   sceneBelongsToNovel,
+  chapterBelongsToNovel,
+  listChapterChat,
   updateNovelOverview,
   updateSceneTitle,
   updateSceneSliders,
@@ -150,6 +152,13 @@ export async function PATCH(
       return Response.json(
         scanMentionsForScene(id, String(body.payload.sceneId)),
       );
+    case "listChapterChat": {
+      const chapterId = String(body.payload.chapterId);
+      if (!chapterBelongsToNovel(chapterId, id)) {
+        return Response.json({ error: "Chapter not found" }, { status: 404 });
+      }
+      return Response.json(listChapterChat(id, chapterId));
+    }
     case "reorderBeats":
       return Response.json(
         reorderBeats(

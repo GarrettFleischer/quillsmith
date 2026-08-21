@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SliderFields } from "@/components/slider-fields";
 import { CHARACTER_SLIDERS, parseSliderMap } from "@/lib/sliders";
 
@@ -14,22 +14,39 @@ export type KnowledgeEntry = {
   slidersJson?: string | null;
 };
 
+export type StoryFields = {
+  title: string;
+  premise: string | null;
+  genre: string | null;
+  tone: string | null;
+  themes: string | null;
+  stakes: string | null;
+  protagonistFocus: string | null;
+  endingIntention: string | null;
+  notes: string | null;
+  styleGuideJson: string | null;
+};
+
+const CODEX_TYPES = ["character", "lore", "location", "item", "other"] as const;
+
 export function KnowledgeSidebar({
   novelId,
   entries,
+  story,
   onChange,
-  onJumpToScene,
+  onJumpToProse,
   onCollapse,
   className,
 }: {
   novelId: string;
   entries: KnowledgeEntry[];
+  story: StoryFields;
   onChange: () => void;
-  onJumpToScene: (sceneId: string) => void;
+  onJumpToProse: (sceneId: string) => void;
   onCollapse?: () => void;
   className?: string;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | "story" | null>("story");
   const [filter, setFilter] = useState("");
   const [draft, setDraft] = useState({
     type: "character",
@@ -39,21 +56,58 @@ export function KnowledgeSidebar({
     notes: "",
     sliders: {} as Record<string, number>,
   });
+  const [storyDraft, setStoryDraft] = useState({
+    premise: story.premise ?? "",
+    genre: story.genre ?? "",
+    tone: story.tone ?? "",
+    themes: story.themes ?? "",
+    stakes: story.stakes ?? "",
+    protagonistFocus: story.protagonistFocus ?? "",
+    endingIntention: story.endingIntention ?? "",
+    notes: story.notes ?? "",
+    styleGuide: story.styleGuideJson ?? "",
+  });
   const [appearances, setAppearances] = useState<
     Array<{ id: string; sceneId: string; contextSnippet: string }>
   >([]);
   const [proposed, setProposed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [quickAdd, setQuickAdd] = useState({ type: "character", name: "" });
 
   const entry = entries.find((e) => e.id === selected) ?? null;
   const filtered = entries.filter(
     (e) =>
       e.name.toLowerCase().includes(filter.toLowerCase()) ||
-      (e.aliases ?? "").toLowerCase().includes(filter.toLowerCase()),
+      (e.aliases ?? "").toLowerCase().includes(filter.toLowerCase()) ||
+      e.type.toLowerCase().includes(filter.toLowerCase()),
   );
+  const grouped = useMemo(() => {
+    const map = new Map<string, KnowledgeEntry[]>();
+    for (const t of CODEX_TYPES) map.set(t, []);
+    for (const e of filtered) {
+      const raw = e.type === "place" ? "location" : e.type;
+      const key = CODEX_TYPES.includes(raw as (typeof CODEX_TYPES)[number]) ? raw : "other";
+      map.set(key, [...(map.get(key) ?? []), e]);
+    }
+    return map;
+  }, [filtered]);
 
   useEffect(() => {
-    if (!selected) {
+    setStoryDraft({
+      premise: story.premise ?? "",
+      genre: story.genre ?? "",
+      tone: story.tone ?? "",
+      themes: story.themes ?? "",
+      stakes: story.stakes ?? "",
+      protagonistFocus: story.protagonistFocus ?? "",
+      endingIntention: story.endingIntention ?? "",
+      notes: story.notes ?? "",
+      styleGuide: story.styleGuideJson ?? "",
+    });
+  }, [story]);
+
+  useEffect(() => {
+    if (!selected || selected === "story") {
       setAppearances([]);
       return;
     }
@@ -84,6 +138,28 @@ export function KnowledgeSidebar({
       }),
     });
     setDraft({ type: "character", name: "", aliases: "", summary: "", notes: "", sliders: {} });
+    onChange();
+  }
+
+  async function saveStory() {
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "updateNovel",
+        payload: {
+          premise: storyDraft.premise,
+          genre: storyDraft.genre,
+          tone: storyDraft.tone,
+          themes: storyDraft.themes,
+          stakes: storyDraft.stakes,
+          protagonistFocus: storyDraft.protagonistFocus,
+          endingIntention: storyDraft.endingIntention,
+          notes: storyDraft.notes,
+          styleGuideJson: storyDraft.styleGuide,
+        },
+      }),
+    });
     onChange();
   }
 
@@ -124,7 +200,7 @@ export function KnowledgeSidebar({
     >
       <div className="border-b border-border px-3 py-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-serif text-lg">Knowledge</h2>
+          <h2 className="font-serif text-lg">Codex</h2>
           {onCollapse ? (
             <button
               type="button"
@@ -144,42 +220,142 @@ export function KnowledgeSidebar({
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         <ul className="p-2">
-          {filtered.length === 0 ? (
-            <li className="px-2 py-4 text-sm text-muted">
-              {entries.length === 0
-                ? "No lore entries yet — add characters and places as you draft."
-                : "No matches for that search."}
-            </li>
-          ) : null}
-          {filtered.map((e) => (
-            <li key={e.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelected(e.id);
-                  setDraft({
-                    type: e.type,
-                    name: e.name,
-                    aliases: e.aliases ?? "",
-                    summary: e.summary ?? "",
-                    notes: e.notes ?? "",
-                    sliders: parseSliderMap(e.slidersJson),
-                  });
-                }}
-                className={`w-full rounded px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
-                  selected === e.id ? "bg-accent-soft text-accent" : "hover:bg-surface-2"
-                }`}
-              >
-                <span className="block font-medium">{e.name}</span>
-                <span className="text-xs uppercase tracking-wide text-muted">{e.type}</span>
-              </button>
-            </li>
-          ))}
+          <li>
+            <button
+              type="button"
+              onClick={() => setSelected("story")}
+              className={`w-full rounded px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
+                selected === "story" ? "bg-accent-soft text-accent" : "hover:bg-surface-2"
+              }`}
+            >
+              <span className="block font-medium">{story.title || "Story"}</span>
+              <span className="text-xs uppercase tracking-wide text-muted">Story</span>
+            </button>
+          </li>
+          {CODEX_TYPES.map((type) => {
+            const rows = grouped.get(type) ?? [];
+            if (filter && rows.length === 0) return null;
+            return (
+              <li key={type} className="mt-2">
+                <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted">{type}</p>
+                {rows.length === 0 ? (
+                  <p className="px-2 pb-1 text-xs text-muted">None yet</p>
+                ) : (
+                  rows.map((e) => (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => {
+                        setSelected(e.id);
+                        setDraft({
+                          type: e.type,
+                          name: e.name,
+                          aliases: e.aliases ?? "",
+                          summary: e.summary ?? "",
+                          notes: e.notes ?? "",
+                          sliders: parseSliderMap(e.slidersJson),
+                        });
+                      }}
+                      className={`mb-0.5 w-full rounded px-2 py-1.5 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
+                        selected === e.id ? "bg-accent-soft text-accent" : "hover:bg-surface-2"
+                      }`}
+                    >
+                      {e.name}
+                    </button>
+                  ))
+                )}
+              </li>
+            );
+          })}
         </ul>
+        <div className="border-t border-border p-2">
+          <p className="px-1 pb-1 text-[11px] uppercase tracking-wide text-muted">Quick add</p>
+          <input
+            className="mb-1 w-full rounded border border-border bg-bg px-2 py-1 text-sm"
+            placeholder="Name"
+            value={quickAdd.name}
+            onChange={(e) => setQuickAdd((d) => ({ ...d, name: e.target.value }))}
+          />
+          <div className="flex gap-1">
+            <select
+              className="min-w-0 flex-1 rounded border border-border bg-bg px-1 py-1 text-xs"
+              value={quickAdd.type}
+              onChange={(e) => setQuickAdd((d) => ({ ...d, type: e.target.value }))}
+            >
+              {CODEX_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="rounded bg-accent px-2 py-1 text-xs text-bg disabled:opacity-50"
+              onClick={async () => {
+                if (!quickAdd.name.trim()) return;
+                await fetch(`/api/novels/${novelId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    action: "upsertKnowledge",
+                    payload: { type: quickAdd.type, name: quickAdd.name.trim() },
+                  }),
+                });
+                setQuickAdd({ type: "character", name: "" });
+                onChange();
+              }}
+              disabled={!quickAdd.name.trim()}
+            >
+              Add
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="max-h-[55%] overflow-auto border-t border-border p-3 text-sm">
-        {entry ? (
+        {selected === "story" ? (
+          <>
+            <p className="mb-2 font-medium">Story</p>
+            {(
+              [
+                ["premise", "Premise"],
+                ["genre", "Genre"],
+                ["tone", "Tone"],
+                ["themes", "Themes"],
+                ["stakes", "Stakes"],
+                ["protagonistFocus", "Protagonist"],
+                ["endingIntention", "Ending intention"],
+                ["notes", "Notes"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="mb-2 block text-xs text-muted">
+                {label}
+                <textarea
+                  className="mt-0.5 w-full rounded border border-border bg-bg px-2 py-1 text-sm text-text"
+                  rows={key === "premise" || key === "notes" ? 3 : 2}
+                  value={storyDraft[key]}
+                  onChange={(e) => setStoryDraft((d) => ({ ...d, [key]: e.target.value }))}
+                />
+              </label>
+            ))}
+            <label className="mb-2 block text-xs text-muted">
+              Style guide (JSON or notes)
+              <textarea
+                className="mt-0.5 w-full rounded border border-border bg-bg px-2 py-1 font-mono text-xs text-text"
+                rows={4}
+                value={storyDraft.styleGuide}
+                onChange={(e) => setStoryDraft((d) => ({ ...d, styleGuide: e.target.value }))}
+              />
+            </label>
+            <button
+              type="button"
+              className="rounded bg-accent px-2 py-1 text-xs text-bg"
+              onClick={() => void saveStory()}
+            >
+              Save story
+            </button>
+          </>
+        ) : entry ? (
           <>
             <label className="block text-xs text-muted">Name</label>
             <input
@@ -193,7 +369,7 @@ export function KnowledgeSidebar({
               value={draft.type}
               onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value }))}
             >
-              {["character", "location", "item", "other"].map((t) => (
+              {CODEX_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -262,14 +438,14 @@ export function KnowledgeSidebar({
                     <button
                       type="button"
                       className="text-left text-xs text-accent hover:underline"
-                      onClick={() => onJumpToScene(a.sceneId)}
+                      onClick={() => onJumpToProse(a.sceneId)}
                     >
                       {a.contextSnippet}
                     </button>
                   </li>
                 ))}
                 {appearances.length === 0 ? (
-                  <li className="text-xs text-muted">None yet — write and save scenes.</li>
+                  <li className="text-xs text-muted">None yet — write and save this chapter.</li>
                 ) : null}
               </ul>
             </div>
@@ -288,7 +464,7 @@ export function KnowledgeSidebar({
               value={draft.type}
               onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value }))}
             >
-              {["character", "location", "item", "other"].map((t) => (
+              {CODEX_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>

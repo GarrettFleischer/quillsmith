@@ -18,6 +18,7 @@ import {
   upsertBeat,
   upsertChapter,
   upsertKnowledge,
+  replaceChapterBeats,
 } from "@/lib/novels";
 import { QUESTION_BANK } from "@/lib/question-bank";
 import { plainFromTipTap } from "@/lib/utils";
@@ -80,15 +81,15 @@ export const PROSE_TOOLS: ToolDef[] = [
   {
     type: "function",
     function: {
-      name: "get_scene_revisions",
-      description: "Fetch prior revisions of a scene for context",
+      name: "get_chapter_revisions",
+      description: "Fetch prior revisions of this chapter's prose",
       parameters: {
         type: "object",
         properties: {
           sceneId: { type: "string" },
+          chapterId: { type: "string" },
           limit: { type: "number" },
         },
-        required: ["sceneId"],
       },
     },
   },
@@ -275,7 +276,7 @@ export const OVERVIEW_TOOLS: ToolDef[] = [
     type: "function",
     function: {
       name: "upsert_beat",
-      description: "Create or update a chapter beat (outline detail, not a scene)",
+      description: "Create or update a chapter beat",
       parameters: {
         type: "object",
         properties: {
@@ -324,10 +325,85 @@ export const OVERVIEW_TOOLS: ToolDef[] = [
   },
 ];
 
+export const CHAPTER_CHAT_TOOLS: ToolDef[] = [
+  ...PROSE_TOOLS,
+  {
+    type: "function",
+    function: {
+      name: "update_chapter_summary",
+      description: "Replace the working summary for the current chapter",
+      parameters: {
+        type: "object",
+        properties: {
+          chapterId: { type: "string" },
+          summary: { type: "string" },
+        },
+        required: ["summary"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "replace_beats",
+      description: "Replace the chapter beat list with an ordered array of beat sentences",
+      parameters: {
+        type: "object",
+        properties: {
+          chapterId: { type: "string" },
+          contents: {
+            type: "array",
+            items: { type: "string" },
+            description: "Ordered beat lines",
+          },
+        },
+        required: ["contents"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "upsert_beat",
+      description: "Create or update one chapter beat",
+      parameters: {
+        type: "object",
+        properties: {
+          chapterId: { type: "string" },
+          id: { type: "string" },
+          content: { type: "string" },
+          order: { type: "number" },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_chapter_rewrite",
+      description:
+        "Queue replacement or appended chapter prose for the author to review as hunks. Never overwrites the manuscript.",
+      parameters: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "Proposed chapter prose" },
+          apply: {
+            type: "string",
+            enum: ["replace", "append"],
+            description: "replace reviews a full rewrite; append adds after existing prose",
+          },
+        },
+        required: ["text"],
+      },
+    },
+  },
+];
+
 export async function executeTool(
   name: string,
   args: Record<string, unknown>,
-  ctx: { novelId: string },
+  ctx: { novelId: string; chapterId?: string },
 ): Promise<unknown> {
   const db = getDb();
   switch (name) {
@@ -406,14 +482,28 @@ export async function executeTool(
         .limit(limit)
         .all();
     }
-    case "get_scene_revisions": {
-      const scene = db.select().from(scenes).where(eq(scenes.id, String(args.sceneId))).get();
-      if (!scene) return { error: "Scene not found" };
+    case "get_scene_revisions":
+    case "get_chapter_revisions": {
+      let sceneId = args.sceneId ? String(args.sceneId) : "";
+      if (!sceneId && (args.chapterId || ctx.chapterId)) {
+        const chapterId = String(args.chapterId ?? ctx.chapterId);
+        const row = db
+          .select()
+          .from(scenes)
+          .where(eq(scenes.chapterId, chapterId))
+          .orderBy(asc(scenes.order))
+          .get();
+        sceneId = row?.id ?? "";
+      }
+      const scene = sceneId
+        ? db.select().from(scenes).where(eq(scenes.id, sceneId)).get()
+        : null;
+      if (!scene) return { error: "Chapter not found" };
       const chapter = db.select().from(chapters).where(eq(chapters.id, scene.chapterId)).get();
       const act = chapter
         ? db.select().from(acts).where(eq(acts.id, chapter.actId)).get()
         : null;
-      if (!act || act.novelId !== ctx.novelId) return { error: "Scene not found" };
+      if (!act || act.novelId !== ctx.novelId) return { error: "Chapter not found" };
       const limit = Number(args.limit ?? 5);
       const rows = db
         .select()
@@ -529,13 +619,47 @@ export async function executeTool(
       });
     }
     case "upsert_beat": {
+      const chapterId = String(args.chapterId ?? ctx.chapterId ?? "");
+      if (!chapterId) return { error: "chapterId required" };
       return upsertBeat({
         id: args.id ? String(args.id) : undefined,
-        chapterId: String(args.chapterId),
+        chapterId,
         novelId: ctx.novelId,
         content: String(args.content),
         order: args.order != null ? Number(args.order) : undefined,
       });
+    }
+    case "update_chapter_summary": {
+      const chapterId = String(args.chapterId ?? ctx.chapterId ?? "");
+      if (!chapterId) return { error: "chapterId required" };
+      const chapter = db.select().from(chapters).where(eq(chapters.id, chapterId)).get();
+      if (!chapter) return { error: "Chapter not found" };
+      return upsertChapter({
+        id: chapterId,
+        novelId: ctx.novelId,
+        title: chapter.title,
+        summary: String(args.summary ?? ""),
+      });
+    }
+    case "replace_beats": {
+      const chapterId = String(args.chapterId ?? ctx.chapterId ?? "");
+      if (!chapterId) return { error: "chapterId required" };
+      const contents = Array.isArray(args.contents)
+        ? args.contents.map((c) => String(c).trim()).filter(Boolean)
+        : String(args.contents ?? "")
+            .split("\n")
+            .map((c) => c.replace(/^\d+\.\s*/, "").trim())
+            .filter(Boolean);
+      return replaceChapterBeats(chapterId, ctx.novelId, contents);
+    }
+    case "propose_chapter_rewrite": {
+      const text = String(args.text ?? "").trim();
+      if (!text) return { error: "text required" };
+      return {
+        queued: true,
+        apply: args.apply === "append" ? "append" : "replace",
+        text,
+      };
     }
     case "set_overview_answer": {
       return setOverviewAnswer(

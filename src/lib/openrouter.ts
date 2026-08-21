@@ -25,6 +25,7 @@ export type AgentEvent =
       args?: string;
       preview?: string;
     }
+  | { type: "draft"; text: string; apply?: "append" | "replace" }
   | { type: "done"; text: string; apply?: "append" | "replace" }
   | { type: "error"; message: string };
 
@@ -246,6 +247,7 @@ export async function* runAgentLoop(opts: {
   messages: ChatMessage[];
   tools?: ToolDef[];
   novelId: string;
+  chapterId?: string;
   signal?: AbortSignal;
 }): AsyncGenerator<AgentEvent> {
   const messages = [...opts.messages];
@@ -334,9 +336,24 @@ export async function* runAgentLoop(opts: {
         } catch {
           parsedArgs = {};
         }
-        const result = await executeTool(tc.name, parsedArgs, { novelId: opts.novelId });
+        const result = await executeTool(tc.name, parsedArgs, {
+          novelId: opts.novelId,
+          chapterId: opts.chapterId,
+        });
         const preview = clip(JSON.stringify(result));
         yield { type: "tool", name: tc.name, phase: "done", preview };
+        if (
+          tc.name === "propose_chapter_rewrite" &&
+          result &&
+          typeof result === "object" &&
+          "text" in result &&
+          typeof (result as { text?: unknown }).text === "string"
+        ) {
+          const text = String((result as { text: string }).text).trim();
+          const apply =
+            (result as { apply?: string }).apply === "append" ? "append" : "replace";
+          if (text) yield { type: "draft", text, apply };
+        }
         messages.push({
           role: "tool",
           tool_call_id: tc.id,

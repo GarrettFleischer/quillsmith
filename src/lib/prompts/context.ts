@@ -74,7 +74,7 @@ export function buildVoiceAnchor(currentScene: string, previousScene = "", maxCh
 /** Glossary block for prose prompts from the novel knowledge base. */
 export function buildCodex(entries: KnowledgeEntry[]): string {
   if (entries.length === 0) {
-    return "(no scene-matched lore — use search_knowledge if you need a name from the bible)";
+    return "(no matching Codex entries — use search_knowledge if you need a name from the bible)";
   }
   return entries
     .map((e) => {
@@ -106,20 +106,12 @@ export function buildOutlineXml(tree: NovelTree): string {
                 `          <beat n="${bi + 1}">${escapeXml(b.content.trim() || "(empty beat)")}</beat>`,
             )
             .join("\n");
-          const sceneLines = ch.scenes
-            .map(
-              (s, si) =>
-                `          <scene number="${si + 1}" title="${escapeXml(s.title || `Scene ${si + 1}`)}" />`,
-            )
-            .join("\n");
           return `      <chapter title="${escapeXml(ch.title)}" number="${ci + 1}">
         <goal>${escapeXml(ch.goal ?? "")}</goal>
+        <summary>${escapeXml((ch.summary ?? "").trim() || "")}</summary>
         <beats>
 ${beatLines || "          (none)"}
         </beats>
-        <scenes>
-${sceneLines || "          (none)"}
-        </scenes>
       </chapter>`;
         })
         .join("\n");
@@ -166,7 +158,7 @@ export function buildSceneInstructions(opts: {
     : "";
 
   const titleHint = opts.sceneTitle?.trim()
-    ? `\n        Scene focus: ${escapeXml(opts.sceneTitle.trim())}`
+    ? `\n        Chapter focus: ${escapeXml(opts.sceneTitle.trim())}`
     : "";
 
   const continueHint = opts.hasExistingProse
@@ -294,14 +286,14 @@ export function buildSlidersBlock(opts: {
   entries: Array<{ id?: string; name: string; type: string; slidersJson?: string | null }>;
 }): string {
   const scene = parseSceneSliders(opts.sceneSlidersJson);
-  const lines = ["Narrative physics (this scene):"];
+  const lines = ["Narrative physics (this chapter):"];
   for (const def of SCENE_SLIDERS) {
     const value = def.id === "tension" ? scene.tension : def.id === "spice" ? scene.spice : undefined;
     lines.push(`- ${formatSliderLine(def, value)}`);
   }
   const characters = opts.entries.filter((e) => e.type === "character");
   if (characters.length === 0) {
-    lines.push("- Characters: (none matched in this scene)");
+    lines.push("- Characters: (none matched in this chapter)");
     return lines.join("\n");
   }
   lines.push("- Character states:");

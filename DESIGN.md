@@ -107,7 +107,7 @@ Depth is mostly tonal — stepped surfaces and hairline borders — with subtle 
 
 - Warm parchment backgrounds with muted teal-ink accents
 - Three-font stack: Fraunces (brand), Source Serif 4 (manuscript), IBM Plex Sans (controls)
-- Wide-rail Write layout: 280px knowledge / fluid manuscript / 260px beats
+- Wide-rail Write layout: 280px Codex/Actions | fluid chapter | 240px Beats | 260px Summary | 320px Chat
 - Bordered, modest-radius controls; accent used sparingly on primary actions and selection
 - Flat surfaces at rest; hairline shadows and backdrop blur only on elevated chrome
 - Revision diffs use rewrite/original semantic colors, not generic highlight yellow
@@ -124,10 +124,10 @@ The palette reads as ink on paper: warm neutrals carry most of the UI; teal ink 
 ### Neutral
 
 - **Warm Parchment** (`#f3efe6` / `#141210`): Page background. Subtle radial accent wash on `body` via `color-mix`.
-- **Ledger Surface** (`#ebe4d6` / `#1e1b18`): Panels, section cards, slash-command shells.
+- **Ledger Surface** (`#ebe4d6` / `#1e1b18`): Panels, section cards, Action and chat shells.
 - **Ledger Step** (`#e2d8c4` / `#2a251f`): Hover states on sidebar list items.
 - **Charcoal Text** (`#1a1612` / `#ebe4d6`): Primary reading color.
-- **Faded Ink** (`#6b6358` / `#9a9184`): Secondary labels, placeholders, metadata, scene titles.
+- **Faded Ink** (`#6b6358` / `#9a9184`): Secondary labels, placeholders, metadata, chapter chrome.
 - **Ruled Border** (`#d4cbb8` / `#2e2924`): Dividers, input strokes, panel edges, list separators.
 
 ### Tertiary
@@ -153,7 +153,7 @@ The palette reads as ink on paper: warm neutrals carry most of the UI; teal ink 
 
 - **Display** (400, `text-5xl` / `text-4xl` / `text-3xl`, line-height 1): Brand wordmark on home, novel titles, act headers. Hero-level, never whispered in nav.
 - **Headline** (400, `text-2xl`–`text-4xl`, tight tracking): Page titles (Settings, Design lab), act names in Write mode.
-- **Title** (400, `text-xl`–`text-2xl`, Source Serif 4): Chapter headings, sidebar section titles, scene labels.
+- **Title** (400, `text-xl`–`text-2xl`, Source Serif 4): Chapter headings, sidebar section titles.
 - **Body** (400, 1.125rem / 1.75 line-height, Source Serif 4): Manuscript prose in `.manuscript` / `.ProseMirror`. Target ~65–75ch in the writing column (`max-w-3xl`).
 - **Label** (400–600, 0.75rem–0.875rem, IBM Plex Sans): Controls, metadata, uppercase tracking on act labels (`tracking-[0.2em]`) and command menus.
 
@@ -165,15 +165,15 @@ The palette reads as ink on paper: warm neutrals carry most of the UI; teal ink 
 
 ## Layout
 
-**Write mode shell (chosen variant A):** full-height flex column — sticky header, then three columns: Knowledge `280px` | manuscript `flex-1 min-w-0` | Beats `260px`. Side rails use `bg-surface/70` with `border-r` / `border-l`.
+**Write mode shell:** full-height flex column — sticky header, then Codex/Actions `280px` | manuscript `flex-1 min-w-0` | Beats `240px` | Summary `260px` | Chat `320px`. Each right rail collapses independently to a 40px strip. Side rails use `bg-surface/70` with `border-r` / `border-l`. Default on typical widths: Codex + Chat open; Beats and Summary collapsed.
 
-**Manuscript column:** `max-w-3xl` centered with `px-6 py-8`. Acts stack vertically with `mb-10`; chapters `mb-8`; scenes separated by `border-b border-border/70 py-8`.
+**Manuscript column:** one chapter at a time, `max-w-3xl` centered with `px-6`. Sticky chapter switcher in the manuscript header. Quiet prose column; highlight BubbleMenu for Send to chat — not card soup.
 
-**Overview mode:** split view — outline editor left (`border-r`, scrollable), AI chat assistant right with mode toggle (Fill / Review).
+**Review mode:** single column `max-w-3xl`, stats and suggestion lists. Sibling of Write, not a Write drawer.
 
-**Home & settings:** single column, `max-w-3xl` or `max-w-5xl`, `px-4 py-12`. Novel list uses divided rows, not card grid.
+**Home & App settings:** single column, `max-w-3xl` or `max-w-5xl`, `px-4 py-12`. Novel list uses divided rows, not card grid.
 
-**Header:** `h-14`, `max-w-[1600px]`, sticky with `border-b`, `bg-bg/90 backdrop-blur-md`.
+**Header:** `h-14`, `max-w-[1600px]`, sticky with `border-b`, `bg-bg/90 backdrop-blur-md`. Mode toggle is Write | Review.
 
 **Spacing rhythm:** 4px base; common gaps `gap-2` (8px), `gap-3` (12px), `gap-4` (16px); section breaks `mt-8`–`mt-12`.
 
@@ -181,7 +181,7 @@ The palette reads as ink on paper: warm neutrals carry most of the UI; teal ink 
 
 Flat-by-default tonal layering. Surfaces step from `bg` → `surface` → `surface-2` to imply depth without drop shadows on cards. The only persistent shadow token is a **hairline rim** (`0 1px 0 rgba(...)`) on `:root` / `.dark`.
 
-Sticky header chrome gets **subtle lift**: semi-transparent background plus `backdrop-blur-md`. Slash-command and rewrite review panels use `border` + `bg-surface` with optional `panel-enter` motion — not floating card stacks.
+Sticky header chrome gets **subtle lift**: semi-transparent background plus `backdrop-blur-md`. Selection BubbleMenu and rewrite review panels use `border` + `bg-surface` with optional `panel-enter` motion — not floating card stacks.
 
 ### Shadow Vocabulary
 
@@ -195,7 +195,7 @@ Sticky header chrome gets **subtle lift**: semi-transparent background plus `bac
 
 ## Shapes
 
-Modest editorial corners — `rounded` (4px) for small controls, `rounded-md` (6px) for inputs and primary buttons, `rounded-lg` (8px) for act containers in Overview. No `rounded-full` pill clusters for primary navigation.
+Modest editorial corners — `rounded` (4px) for small controls, `rounded-md` (6px) for inputs and primary buttons, `rounded-lg` (8px) for Review stat panels. No `rounded-full` pill clusters for primary navigation.
 
 Borders are 1px `border-border` on inputs, panels, and list dividers. Form fields use filled `bg-bg` inside `border-border` strokes, not underline-only inputs.
 
@@ -216,11 +216,11 @@ Editorial and tactile: confident borders, ledger panels, quiet manuscript column
 ### Chips / Segmented Nav
 
 - **Style:** Bordered container `rounded-md border border-border bg-surface p-0.5`; active segment `bg-accent-soft text-accent`
-- **State:** Used for Overview/Write toggle and Fill/Review mode — not for global primary nav pills
+- **State:** Used for Write/Review toggle and composer Action/Selection chips — not for global primary nav pills
 
 ### Cards / Containers
 
-- **Corner Style:** `rounded-lg` for act blocks in Overview; `rounded-md` for inline panels
+- **Corner Style:** `rounded-lg` for Review report panels; `rounded-md` for inline panels
 - **Background:** `bg-surface` or `bg-surface/50` with `border border-border`
 - **Shadow Strategy:** None at rest; refer to Elevation section
 - **Border:** Always present on containers
@@ -235,13 +235,15 @@ Editorial and tactile: confident borders, ledger panels, quiet manuscript column
 ### Navigation
 
 - **Header:** Sticky bar; brand link `font-display text-2xl`; utility links as bordered ghost buttons
-- **Novel context:** Breadcrumb `/` + truncated serif title + segmented Overview/Write control
-- **Mobile:** Novel context nav hidden below `sm`; core flows remain usable with stacked layout
+- **Novel context:** Breadcrumb `/` + truncated serif title + segmented Write/Review control
+- **Mobile:** Write/Review stays visible; Write panes are Manuscript / Codex / Chat / Plan
 
 ### Ledger Sidebar (signature)
 
-- **Knowledge rail:** `w-[280px]`, `border-r`, `bg-surface/70`, searchable list with `accent-soft` selection
-- **Beats rail:** `w-[260px]`, `border-l`, beat items as bordered `bg-bg` textareas with reorder controls
+- **Codex / Actions rail:** `w-[280px]`, `border-r`, `bg-surface/70`, searchable grouped list with `accent-soft` selection; Story item at top
+- **Beats rail:** `w-[240px]`, `border-l`, beat items as bordered `bg-bg` textareas with reorder controls
+- **Summary rail:** `w-[260px]`, `border-l`, chapter summary textarea
+- **Chat rail:** `w-[320px]`, `border-l`, messages + Selection/Action chips + composer
 - **Character:** Working notes pinned beside the manuscript, not a floating dashboard
 
 ### Diff Review (signature)
@@ -257,7 +259,7 @@ Editorial and tactile: confident borders, ledger panels, quiet manuscript column
 - **Do** use the three-font stack: Fraunces (display), Source Serif 4 (manuscript), IBM Plex Sans (UI).
 - **Do** keep the manuscript column quiet — prose flows without card wrappers per paragraph.
 - **Do** use teal accent on primary actions and selected states only.
-- **Do** use ledger side rails at 280px / 260px in Write mode.
+- **Do** use ledger side rails at 280 / 240 / 260 / 320 in Write mode.
 - **Do** animate panel reveals with soft `rise` (280ms ease), opacity + 6px translateY.
 - **Do** render **Quillsmith** at display scale in chrome.
 

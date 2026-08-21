@@ -41,18 +41,20 @@ export async function GET(
     for (const act of tree.acts) {
       lines.push(`## ${act.title}`, "");
       if (act.brief) lines.push(act.brief, "");
-      for (const chapter of act.chapters) {
-        lines.push(`### ${chapter.title}`, "");
-        if (chapter.goal) lines.push(`*Goal:* ${chapter.goal}`, "");
-        if (chapter.beats.length) {
-          lines.push("**Beats**", "");
-          chapter.beats.forEach((b, i) => lines.push(`${i + 1}. ${b.content}`));
-          lines.push("");
+        for (const chapter of act.chapters) {
+          lines.push(`### ${chapter.title}`, "");
+          if (chapter.goal) lines.push(`*Goal:* ${chapter.goal}`, "");
+          if (chapter.summary) lines.push(chapter.summary, "");
+          if (chapter.beats.length) {
+            lines.push("**Beats**", "");
+            chapter.beats.forEach((b, i) => lines.push(`${i + 1}. ${b.content}`));
+            lines.push("");
+          }
+          const prose = chapter.prose ?? chapter.scenes[0];
+          if (prose) {
+            lines.push(plainFromTipTap(prose.content), "");
+          }
         }
-        for (const scene of chapter.scenes) {
-          lines.push(`#### ${scene.title || "Scene"}`, "", plainFromTipTap(scene.content), "");
-        }
-      }
     }
     return new Response(lines.join("\n"), {
       headers: {

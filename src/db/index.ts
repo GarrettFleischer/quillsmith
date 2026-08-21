@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import * as schema from "./schema";
 import { seedIfNeeded } from "./seed";
+import { EMPTY_DOC, id, mergeTipTapDocs } from "@/lib/utils";
 
 const dataDir = path.join(process.cwd(), "data");
 const dbPath = path.join(dataDir, "quillsmith.db");
@@ -125,6 +126,16 @@ function migrate(sqlite: BetterSqlite3.Database) {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS chapter_chat_messages (
+      id TEXT PRIMARY KEY,
+      novel_id TEXT NOT NULL REFERENCES novels(id) ON DELETE CASCADE,
+      chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      meta_json TEXT DEFAULT '',
+      created_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS overview_answers (
       id TEXT PRIMARY KEY,
       novel_id TEXT NOT NULL REFERENCES novels(id) ON DELETE CASCADE,
@@ -201,6 +212,8 @@ function migrate(sqlite: BetterSqlite3.Database) {
   ensureColumn(sqlite, "scenes", "sliders_json", "TEXT DEFAULT '{}'");
   ensureColumn(sqlite, "knowledge_entries", "sliders_json", "TEXT DEFAULT '{}'");
   ensureColumn(sqlite, "app_settings", "craft_pipeline", "INTEGER NOT NULL DEFAULT 1");
+
+  collapseScenesIntoChapters(sqlite);
 }
 
 function ensureColumn(
@@ -212,6 +225,57 @@ function ensureColumn(
   const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   if (cols.some((c) => c.name === column)) return;
   sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+type SceneRow = {
+  id: string;
+  chapter_id: string;
+  order: number;
+  title: string | null;
+  content: string;
+};
+
+function collapseScenesIntoChapters(sqlite: BetterSqlite3.Database) {
+  const chapterIds = sqlite.prepare(`SELECT id FROM chapters`).all() as Array<{ id: string }>;
+  const now = Date.now();
+  const insertScene = sqlite.prepare(
+    `INSERT INTO scenes (id, chapter_id, "order", title, content, updated_at)
+     VALUES (?, ?, 0, '', ?, ?)`,
+  );
+  const updateScene = sqlite.prepare(
+    `UPDATE scenes SET content = ?, title = '', "order" = 0, updated_at = ? WHERE id = ?`,
+  );
+  const moveAppearances = sqlite.prepare(
+    `UPDATE knowledge_appearances SET scene_id = ? WHERE scene_id = ?`,
+  );
+  const moveCoach = sqlite.prepare(`UPDATE coach_sessions SET scene_id = ? WHERE scene_id = ?`);
+  const deleteRevisions = sqlite.prepare(`DELETE FROM scene_revisions WHERE scene_id = ?`);
+  const deleteScene = sqlite.prepare(`DELETE FROM scenes WHERE id = ?`);
+
+  const listScenes = sqlite.prepare(
+    `SELECT id, chapter_id, "order", title, content FROM scenes WHERE chapter_id = ? ORDER BY "order"`,
+  );
+
+  for (const chapter of chapterIds) {
+    const rows = listScenes.all(chapter.id) as SceneRow[];
+    if (rows.length === 0) {
+      insertScene.run(id(), chapter.id, EMPTY_DOC, now);
+      continue;
+    }
+    if (rows.length === 1) continue;
+
+    const keep = rows[0];
+    const merged = mergeTipTapDocs(
+      rows.map((row) => ({ json: row.content, heading: row.title })),
+    );
+    updateScene.run(merged, now, keep.id);
+    for (const extra of rows.slice(1)) {
+      moveAppearances.run(keep.id, extra.id);
+      moveCoach.run(keep.id, extra.id);
+      deleteRevisions.run(extra.id);
+      deleteScene.run(extra.id);
+    }
+  }
 }
 
 export type Db = ReturnType<typeof getDb>;

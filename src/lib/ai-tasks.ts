@@ -26,13 +26,14 @@ import {
   PROSE_SYSTEM_PROMPT,
   REWRITE_SYSTEM_PROMPT,
   SUMMARY_SYSTEM_PROMPT,
+  CHAPTER_CHAT_SYSTEM_PROMPT,
 } from "@/lib/prompts/rules";
 import {
   densityScanSystem,
   identifyScrubberSystem,
   rewriteScrubberSystem,
 } from "@/lib/prompts/scrubbers";
-import { OVERVIEW_TOOLS, PROSE_TOOLS, type ToolDef } from "@/lib/tools";
+import { OVERVIEW_TOOLS, PROSE_TOOLS, CHAPTER_CHAT_TOOLS, type ToolDef } from "@/lib/tools";
 
 export type AiTaskId =
   | "prose_expand"
@@ -72,7 +73,8 @@ export type AiTaskId =
   | "layer_brief"
   | "layer_dialogue"
   | "layer_prose"
-  | "layer_climax";
+  | "layer_climax"
+  | "chapter_chat";
 
 export type AiOutputMode = "prose" | "markdown_feedback" | "structured_json";
 
@@ -83,7 +85,7 @@ export type AiTaskDef = {
   outputMode: AiOutputMode;
   defaultModel: string;
   temperature: number;
-  tools: "prose" | "overview" | "none";
+  tools: "prose" | "overview" | "chapter" | "none";
   writesScene: boolean;
   group: "draft" | "overview" | "coach" | "scrub" | "check" | "layer" | "context" | "meta";
 };
@@ -390,6 +392,17 @@ export const AI_TASKS: AiTaskDef[] = [
     writesScene: true,
     group: "layer",
   },
+  {
+    id: "chapter_chat",
+    label: "Chapter chat",
+    description: "Plan this chapter: summary, beats, and Codex-aware questions",
+    outputMode: "markdown_feedback",
+    defaultModel: PROSE_DEFAULT,
+    temperature: 0.4,
+    tools: "chapter",
+    writesScene: false,
+    group: "draft",
+  },
 ];
 
 export const AI_TASK_BY_ID: Record<AiTaskId, AiTaskDef> = Object.fromEntries(
@@ -403,6 +416,7 @@ export function isAiTaskId(value: string): value is AiTaskId {
 export function toolsForTask(task: AiTaskDef): ToolDef[] | undefined {
   if (task.tools === "prose") return PROSE_TOOLS;
   if (task.tools === "overview") return OVERVIEW_TOOLS;
+  if (task.tools === "chapter") return CHAPTER_CHAT_TOOLS;
   return undefined;
 }
 
@@ -420,6 +434,8 @@ export function systemPromptForTask(
       return PROSE_SYSTEM_PROMPT;
     case "prose_rewrite":
       return REWRITE_SYSTEM_PROMPT;
+    case "chapter_chat":
+      return CHAPTER_CHAT_SYSTEM_PROMPT;
     case "overview_fill":
     case "overview_review":
       return OVERVIEW_SYSTEM_PROMPT;
@@ -499,6 +515,8 @@ const TELL_FOR_SLUG: Record<string, AiTellId> = Object.fromEntries(
   Object.entries(SLUG_FOR_TELL).map(([id, slug]) => [slug, id as AiTellId]),
 ) as Record<string, AiTellId>;
 
+export { commandKind, type CommandKind } from "@/lib/command-kind";
+
 export function commandSlugToTask(slug: string): AiTaskId | null {
   if (slug === "expand" || slug.startsWith("expand-")) return "prose_expand";
   if (slug === "rewrite" || slug.startsWith("rewrite-")) return "prose_rewrite";
@@ -514,17 +532,6 @@ export function commandSlugToTask(slug: string): AiTaskId | null {
     if (isCheckId(key)) return `check_${key}` as AiTaskId;
   }
   return null;
-}
-
-export function commandKind(
-  slug: string,
-): "expand" | "rewrite" | "feedback" | "check" | "layer" {
-  if (slug === "layer") return "layer";
-  if (slug.startsWith("check-")) return "check";
-  const task = commandSlugToTask(slug);
-  if (task === "prose_expand") return "expand";
-  if (task === "prose_rewrite") return "rewrite";
-  return "feedback";
 }
 
 export function checkIdFromTask(taskId: AiTaskId): CheckId | null {

@@ -21,7 +21,7 @@ const plex = IBM_Plex_Sans({
 
 export const metadata: Metadata = {
   title: "Quillsmith",
-  description: "Local-first novel writing with overview planning and AI-assisted drafting",
+  description: "Local-first novel writing with chapter drafting, a Codex, and AI assistance",
 };
 
 export default function RootLayout({

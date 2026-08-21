@@ -67,3 +67,7 @@ export function knowledgeForSceneText(novelId: string, text: string) {
     return names.some((name) => new RegExp(`\\b${escapeRegExp(name)}\\b`, "i").test(text));
   });
 }
+
+export function knowledgeForChapterText(novelId: string, text: string) {
+  return knowledgeForSceneText(novelId, text);
+}

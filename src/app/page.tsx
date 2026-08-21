@@ -42,7 +42,7 @@ export default function HomePage() {
     if (!res.ok) return;
     const novel = await res.json();
     if (!novel?.id) return;
-    router.push(`/novel/${novel.id}/overview`);
+    router.push(`/novel/${novel.id}`);
   }
 
   return (
@@ -53,8 +53,8 @@ export default function HomePage() {
           Quillsmith
         </p>
         <p className="mt-3 max-w-xl text-lg text-muted">
-          Plan top-down — acts, chapters, beats — then draft scenes with a knowledge base
-          that stays with the story.
+          Plan top-down — acts, chapters, beats — then draft each chapter with a Codex that stays
+          with the story.
         </p>
 
         <div className="mt-10 flex gap-2">
@@ -89,7 +89,7 @@ export default function HomePage() {
                   <button
                     type="button"
                     className="flex w-full items-baseline justify-between gap-4 py-4 text-left hover:bg-surface/60"
-                    onClick={() => router.push(`/novel/${n.id}/overview`)}
+                    onClick={() => router.push(`/novel/${n.id}`)}
                   >
                     <span>
                       <span className="block font-serif text-lg">{n.title}</span>

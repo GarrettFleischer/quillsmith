@@ -15,28 +15,30 @@ related_targets: ["route:/novel/[id]"]
 
 ## Audience & job
 
-Serious hobbyist novelist drafting scenes. Primary job: **lore-aware AI in the scene** — slash commands, diffs, and KB feel native to writing.
+Serious hobbyist novelist already in flow. Primary job: **stay in the chapter** — Codex and Actions on the left, one chapter in the center, Beats / Summary / Chat on the right.
 
 ## Outcome
 
-Draft/revise scenes with chapter beats visible, KB on demand, chapter jump via mini TOC. No Overview redesign.
+Draft and revise one chapter at a time. Lore, saved Actions, beats, summary, and chapter chat never replace the manuscript with a wizard.
 
 ## Direction
 
-Manuscript desk with collapsible lore drawer + chapter beat rail. KB starts collapsed; beats follow active chapter; chapter picker in manuscript header.
+Chapter desk with independently collapsible ledger rails. Default: Codex + Chat open; Beats and Summary collapsed to 40px strips. Highlight BubbleMenu **Send to chat** (Selection chip, not paste). Action chips open Write → Settings on that prompt.
 
 ## Memorable moment
 
-Type `/`, run rewrite, review diffs in-scene; beats stay on the right; KB stays out of the way until expanded.
+Highlight a passage, Send to chat, attach Expand, review hunks in the chapter — the page never yields to Overview or a Coach drawer.
 
 ## Boundaries
 
 - Preserve Ink Ledger; no floating dashboard panels
-- Mobile: Manuscript / Knowledge / Beats tabs
-- Untouched: header Overview/Write toggle, tool-calling semantics, Settings templates
+- Mobile: Manuscript / Codex / Chat / Plan (summary + beats stacked)
+- Header is Write | Review; Overview wizard retired
+- No “scene” language in UI copy
 
 ## Resolved in build
 
-- TOC: chapter `<select>` in manuscript header
-- KB: collapsed strip + Show/Hide; Hide in sidebar
-- Scene titles editable via `updateSceneTitle`
+- Left rail tabs: Codex (Story + character/lore/location/item/other) and Settings (Actions + variable inserter)
+- Center: act/chapter switcher, add act/chapter, one TipTap chapter body
+- Right inner → outer: Beats 240 / Summary 260 / Chat 320
+- Chapter chat API: summary, beats, Codex search, propose rewrite as hunks

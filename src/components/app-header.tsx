@@ -11,7 +11,7 @@ export function AppHeader({
 }: {
   novelTitle?: string;
   novelId?: string;
-  mode?: "overview" | "write";
+  mode?: "write" | "review";
 }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -24,19 +24,11 @@ export function AppHeader({
           Quillsmith
         </Link>
         {novelTitle ? (
-          <div className="hidden min-w-0 flex-1 items-center gap-3 sm:flex">
-            <span className="text-muted">/</span>
-            <span className="truncate font-serif text-lg">{novelTitle}</span>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <span className="hidden text-muted sm:inline">/</span>
+            <span className="hidden truncate font-serif text-lg sm:inline">{novelTitle}</span>
             {novelId && mode ? (
-              <nav className="ml-4 flex rounded-md border border-border bg-surface p-0.5 text-sm">
-                <Link
-                  href={`/novel/${novelId}/overview`}
-                  className={`rounded px-3 py-1 transition ${
-                    mode === "overview" ? "bg-accent-soft text-accent" : "text-muted hover:text-text"
-                  }`}
-                >
-                  Overview
-                </Link>
+              <nav className="flex rounded-md border border-border bg-surface p-0.5 text-sm">
                 <Link
                   href={`/novel/${novelId}`}
                   className={`rounded px-3 py-1 transition ${
@@ -44,6 +36,14 @@ export function AppHeader({
                   }`}
                 >
                   Write
+                </Link>
+                <Link
+                  href={`/novel/${novelId}/review`}
+                  className={`rounded px-3 py-1 transition ${
+                    mode === "review" ? "bg-accent-soft text-accent" : "text-muted hover:text-text"
+                  }`}
+                >
+                  Review
                 </Link>
               </nav>
             ) : null}
@@ -72,7 +72,7 @@ export function AppHeader({
             href="/settings"
             className="rounded border border-border px-2 py-1 text-muted hover:text-text"
           >
-            Settings
+            App
           </Link>
           <button
             type="button"

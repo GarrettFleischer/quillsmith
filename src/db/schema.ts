@@ -117,6 +117,20 @@ export const overviewChatMessages = sqliteTable("overview_chat_messages", {
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 });
 
+export const chapterChatMessages = sqliteTable("chapter_chat_messages", {
+  id: text("id").primaryKey(),
+  novelId: text("novel_id")
+    .notNull()
+    .references(() => novels.id, { onDelete: "cascade" }),
+  chapterId: text("chapter_id")
+    .notNull()
+    .references(() => chapters.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  content: text("content").notNull(),
+  metaJson: text("meta_json").default(""),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export const overviewAnswers = sqliteTable("overview_answers", {
   id: text("id").primaryKey(),
   novelId: text("novel_id")

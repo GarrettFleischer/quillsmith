@@ -3,16 +3,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ActionsSidebar } from "@/components/actions-sidebar";
 import { AppHeader } from "@/components/app-header";
 import { BeatsSidebar, type Beat } from "@/components/beats-sidebar";
-import { CoachPanel } from "@/components/coach-panel";
-import { KnowledgeSidebar, type KnowledgeEntry } from "@/components/knowledge-sidebar";
-import { SceneEditor } from "@/components/scene-editor";
-import type { DensityLevel } from "@/lib/ai-tell-density";
+import { ChapterChat } from "@/components/chapter-chat";
+import { ChapterEditor, type DraftResult } from "@/components/chapter-editor";
+import { ChapterSummaryRail } from "@/components/chapter-summary";
+import { KnowledgeSidebar, type KnowledgeEntry, type StoryFields } from "@/components/knowledge-sidebar";
+import { RailStrip } from "@/components/rail-strip";
 import { useEditorStore } from "@/store/editor";
+import { useWorkspaceStore } from "@/store/workspace";
+
+type Prose = {
+  id: string;
+  title: string | null;
+  content: string;
+  chapterId: string;
+  slidersJson?: string | null;
+};
 
 type Tree = {
-  novel: { id: string; title: string };
+  novel: StoryFields & { id: string };
   acts: Array<{
     id: string;
     title: string;
@@ -23,25 +34,20 @@ type Tree = {
       goal: string | null;
       summary: string | null;
       beats: Beat[];
-      scenes: Array<{
-        id: string;
-        title: string | null;
-        content: string;
-        chapterId: string;
-        slidersJson?: string | null;
-      }>;
+      prose: Prose | null;
+      scenes: Prose[];
     }>;
   }>;
   knowledge: KnowledgeEntry[];
 };
 
-type MobilePane = "manuscript" | "knowledge" | "beats" | "coach";
+type MobilePane = "manuscript" | "codex" | "chat" | "plan";
 
 const MOBILE_TABS: { id: MobilePane; label: string }[] = [
   { id: "manuscript", label: "Manuscript" },
-  { id: "knowledge", label: "Knowledge" },
-  { id: "coach", label: "Coach" },
-  { id: "beats", label: "Beats" },
+  { id: "codex", label: "Codex" },
+  { id: "chat", label: "Chat" },
+  { id: "plan", label: "Plan" },
 ];
 
 export default function WritePage() {
@@ -54,15 +60,23 @@ export default function WritePage() {
   >([]);
   const [model, setModel] = useState("anthropic/claude-sonnet-4");
   const [hasApiKey, setHasApiKey] = useState(true);
-  const [kbOpen, setKbOpen] = useState(false);
-  const [coachOpen, setCoachOpen] = useState(true);
-  const [densityLevel, setDensityLevel] = useState<DensityLevel | null>(null);
-  const [mobilePane, setMobilePane] = useState<MobilePane>("manuscript");
+  const [draftResult, setDraftResult] = useState<DraftResult | null>(null);
   const activeChapterId = useEditorStore((s) => s.activeChapterId);
-  const activeSceneId = useEditorStore((s) => s.activeSceneId);
   const setActive = useEditorStore((s) => s.setActive);
   const setNovel = useEditorStore((s) => s.setNovel);
   const status = useEditorStore((s) => s.status);
+  const leftTab = useWorkspaceStore((s) => s.leftTab);
+  const setLeftTab = useWorkspaceStore((s) => s.setLeftTab);
+  const leftOpen = useWorkspaceStore((s) => s.leftOpen);
+  const setLeftOpen = useWorkspaceStore((s) => s.setLeftOpen);
+  const beatsOpen = useWorkspaceStore((s) => s.beatsOpen);
+  const setBeatsOpen = useWorkspaceStore((s) => s.setBeatsOpen);
+  const summaryOpen = useWorkspaceStore((s) => s.summaryOpen);
+  const setSummaryOpen = useWorkspaceStore((s) => s.setSummaryOpen);
+  const chatOpen = useWorkspaceStore((s) => s.chatOpen);
+  const setChatOpen = useWorkspaceStore((s) => s.setChatOpen);
+  const mobilePane = useWorkspaceStore((s) => s.mobilePane);
+  const setMobilePane = useWorkspaceStore((s) => s.setMobilePane);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/novels/${novelId}`);
@@ -99,7 +113,7 @@ export default function WritePage() {
       setActive({
         chapterId: firstChapter.id,
         actId: firstAct.id,
-        sceneId: firstChapter.scenes[0]?.id ?? null,
+        sceneId: firstChapter.prose?.id ?? firstChapter.scenes[0]?.id ?? null,
       });
     }
   }, [data, activeChapterId, setActive]);
@@ -110,8 +124,8 @@ export default function WritePage() {
       act.chapters.map((ch) => ({
         id: ch.id,
         actId: act.id,
-        label: `${act.title} · ${ch.title}`,
-        firstSceneId: ch.scenes[0]?.id ?? null,
+        label: `${act.title} / ${ch.title}`,
+        proseId: ch.prose?.id ?? ch.scenes[0]?.id ?? null,
       })),
     );
   }, [data]);
@@ -121,59 +135,59 @@ export default function WritePage() {
     if (activeChapterId) {
       for (const act of data.acts) {
         const ch = act.chapters.find((c) => c.id === activeChapterId);
-        if (ch) return ch;
+        if (ch) return { ...ch, actId: act.id, actTitle: act.title };
       }
     }
-    return data.acts[0]?.chapters[0] ?? null;
+    const act = data.acts[0];
+    const ch = act?.chapters[0];
+    return ch && act ? { ...ch, actId: act.id, actTitle: act.title } : null;
   }, [data, activeChapterId]);
 
-  const activeScene = useMemo(() => {
-    if (!activeChapter) return null;
-    return (
-      activeChapter.scenes.find((s) => s.id === activeSceneId) ??
-      activeChapter.scenes[0] ??
-      null
-    );
-  }, [activeChapter, activeSceneId]);
+  const prose = activeChapter?.prose ?? activeChapter?.scenes[0] ?? null;
 
-  const createScene = useCallback(
-    async (chapterId: string) => {
-      const res = await fetch(`/api/novels/${novelId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "createScene",
-          payload: { chapterId },
-        }),
-      });
-      if (!res.ok) {
-        setLoadError("Could not create scene.");
-        return;
-      }
-      void refresh();
-    },
-    [novelId, refresh],
-  );
-
-  function jumpToScene(sceneId: string) {
-    setMobilePane("manuscript");
-    requestAnimationFrame(() => {
-      document
-        .querySelector(`[data-scene-id="${sceneId}"]`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  async function addAct() {
+    const n = (data?.acts.length ?? 0) + 1;
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "upsertAct", payload: { title: `Act ${n}` } }),
     });
+    await refresh();
   }
 
-  function jumpToChapter(chapterId: string) {
+  async function addChapter() {
+    if (!activeChapter) return;
+    const act = data?.acts.find((a) => a.id === activeChapter.actId);
+    const n = (act?.chapters.length ?? 0) + 1;
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "upsertChapter",
+        payload: { actId: activeChapter.actId, title: `Chapter ${n}` },
+      }),
+    });
+    await refresh();
+  }
+
+  function selectChapter(chapterId: string) {
     const opt = chapterOptions.find((c) => c.id === chapterId);
     if (!opt) return;
-    setActive({ chapterId: opt.id, actId: opt.actId, sceneId: opt.firstSceneId });
+    setActive({ chapterId: opt.id, actId: opt.actId, sceneId: opt.proseId });
     setMobilePane("manuscript");
-    requestAnimationFrame(() => {
-      document
-        .querySelector(`[data-chapter-id="${chapterId}"]`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+  }
+
+  function jumpToProse(sceneId: string) {
+    if (!data) return;
+    for (const act of data.acts) {
+      for (const ch of act.chapters) {
+        if (ch.prose?.id === sceneId || ch.scenes.some((s) => s.id === sceneId)) {
+          setActive({ chapterId: ch.id, actId: act.id, sceneId });
+          setMobilePane("manuscript");
+          return;
+        }
+      }
+    }
   }
 
   if (!data) {
@@ -192,12 +206,17 @@ export default function WritePage() {
     );
   }
 
-  const showKbDesktop = kbOpen;
-  const showCoachDesktop = coachOpen;
-  const showKbMobile = mobilePane === "knowledge";
-  const showBeatsMobile = mobilePane === "beats";
-  const showCoachMobile = mobilePane === "coach";
+  const showLeftDesktop = leftOpen;
+  const showBeatsDesktop = beatsOpen;
+  const showSummaryDesktop = summaryOpen;
+  const showChatDesktop = chatOpen;
+  const showCodexMobile = mobilePane === "codex";
+  const showChatMobile = mobilePane === "chat";
+  const showPlanMobile = mobilePane === "plan";
   const showManuscriptMobile = mobilePane === "manuscript";
+
+  const leftClass = (mobile: boolean) =>
+    `${mobile ? "flex w-full" : "hidden"} ${showLeftDesktop ? "lg:flex lg:w-auto" : "lg:hidden"}`;
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -216,9 +235,7 @@ export default function WritePage() {
               role="tab"
               aria-selected={mobilePane === id}
               className={`flex-1 rounded px-2 py-1.5 text-sm transition ${
-                mobilePane === id
-                  ? "bg-accent-soft text-accent"
-                  : "text-muted hover:text-text"
+                mobilePane === id ? "bg-accent-soft text-accent" : "text-muted hover:text-text"
               }`}
               onClick={() => setMobilePane(id)}
             >
@@ -228,37 +245,58 @@ export default function WritePage() {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        {!showKbDesktop ? (
-          <div className="hidden shrink-0 flex-col border-r border-border bg-surface/70 lg:flex">
-            <button
-              type="button"
-              className="flex h-full w-10 items-center justify-center px-1 text-xs tracking-wide text-muted transition hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
-              aria-label="Open knowledge base"
-              onClick={() => setKbOpen(true)}
-            >
-              <span className="ledger-rail-label">Knowledge</span>
-            </button>
-          </div>
+      <div className="flex min-h-0 flex-1 overflow-x-auto">
+        {!showLeftDesktop ? (
+          <RailStrip label="Codex" side="left" onClick={() => setLeftOpen(true)} />
         ) : null}
 
-        <div
-          className={`min-h-0 ${
-            showKbMobile ? "flex w-full" : "hidden"
-          } ${showKbDesktop ? "lg:flex lg:w-auto" : "lg:hidden"}`}
-        >
-          {showKbDesktop || showKbMobile ? (
-            <KnowledgeSidebar
-              novelId={novelId}
-              entries={data.knowledge}
-              onChange={() => void refresh()}
-              onJumpToScene={jumpToScene}
-              onCollapse={() => {
-                setKbOpen(false);
-                setMobilePane("manuscript");
-              }}
-              className={showKbMobile && !showKbDesktop ? "w-full border-r-0" : undefined}
-            />
+        <div className={leftClass(showCodexMobile)}>
+          {showLeftDesktop || showCodexMobile ? (
+            <div className="flex h-full min-h-0">
+              <div className="flex h-full flex-col border-r border-border bg-surface/70">
+                <button
+                  type="button"
+                  className={`px-2 py-3 text-xs ${leftTab === "codex" ? "bg-accent-soft text-accent" : "text-muted"}`}
+                  onClick={() => setLeftTab("codex")}
+                >
+                  Codex
+                </button>
+                <button
+                  type="button"
+                  className={`px-2 py-3 text-xs ${leftTab === "settings" ? "bg-accent-soft text-accent" : "text-muted"}`}
+                  onClick={() => setLeftTab("settings")}
+                >
+                  Settings
+                </button>
+              </div>
+              {leftTab === "codex" ? (
+                <KnowledgeSidebar
+                  novelId={novelId}
+                  entries={data.knowledge}
+                  story={data.novel}
+                  onChange={() => void refresh()}
+                  onJumpToProse={jumpToProse}
+                  onCollapse={() => {
+                    setLeftOpen(false);
+                    setMobilePane("manuscript");
+                  }}
+                  className={showCodexMobile && !showLeftDesktop ? "w-full border-r-0" : undefined}
+                />
+              ) : (
+                <ActionsSidebar
+                  onCollapse={() => {
+                    setLeftOpen(false);
+                    setMobilePane("manuscript");
+                  }}
+                  onChange={() => {
+                    void fetch("/api/settings")
+                      .then((r) => r.json())
+                      .then((s) => setCommands(s.commands ?? []));
+                  }}
+                  className={showCodexMobile && !showLeftDesktop ? "w-full border-r-0" : undefined}
+                />
+              )}
+            </div>
           ) : null}
         </div>
 
@@ -279,47 +317,24 @@ export default function WritePage() {
                       {status}
                     </p>
                   ) : null}
-                  {densityLevel && densityLevel !== "low" ? (
-                    <p className="mt-2 text-xs text-muted">
-                      Last density scan:{" "}
-                      <span className={densityLevel === "high" ? "text-danger" : "text-accent"}>
-                        {densityLevel}
-                      </span>{" "}
-                      — counts, not an AI score. Open Coach → AI Tells.
-                    </p>
-                  ) : null}
                   {!hasApiKey ? (
                     <p className="mt-2 text-xs text-muted">
                       Add an OpenRouter key in{" "}
                       <Link href="/settings" className="text-accent hover:underline">
-                        Settings
+                        App
                       </Link>{" "}
-                      to use slash commands.
+                      to use chat and Actions.
                     </p>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-end gap-3">
-                  <button
-                    type="button"
-                    className="hidden rounded-md border border-border px-2 py-1 text-xs text-muted transition hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:inline-flex"
-                    onClick={() => setKbOpen((o) => !o)}
-                  >
-                    {kbOpen ? "Hide knowledge" : "Show knowledge"}
-                  </button>
-                  <button
-                    type="button"
-                    className="hidden rounded-md border border-border px-2 py-1 text-xs text-muted transition hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:inline-flex"
-                    onClick={() => setCoachOpen((o) => !o)}
-                  >
-                    {coachOpen ? "Hide coach" : "Show coach"}
-                  </button>
                   {chapterOptions.length > 0 ? (
                     <label className="block text-xs text-muted">
-                      Jump to chapter
+                      Chapter
                       <select
-                        className="mt-1 block max-w-[14rem] rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        className="mt-1 block max-w-[16rem] rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         value={activeChapter?.id ?? ""}
-                        onChange={(e) => jumpToChapter(e.target.value)}
+                        onChange={(e) => selectChapter(e.target.value)}
                       >
                         {chapterOptions.map((c) => (
                           <option key={c.id} value={c.id}>
@@ -329,6 +344,21 @@ export default function WritePage() {
                       </select>
                     </label>
                   ) : null}
+                  <button
+                    type="button"
+                    className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:text-text"
+                    onClick={() => void addChapter()}
+                    disabled={!activeChapter}
+                  >
+                    Add chapter
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:text-text"
+                    onClick={() => void addAct()}
+                  >
+                    Add act
+                  </button>
                   <label className="block text-xs text-muted">
                     Model
                     <input
@@ -346,179 +376,134 @@ export default function WritePage() {
             <div className="pt-8">
               {data.acts.length === 0 ? (
                 <div className="rounded-lg border border-border bg-surface/50 p-6 panel-enter">
-                  <p className="font-serif text-xl">No structure yet</p>
+                  <p className="font-serif text-xl">No chapters yet</p>
                   <p className="mt-2 max-w-md text-sm text-muted">
-                    Plan acts, chapters, and beats in Overview, then return here to draft scenes.
+                    Add an act to start drafting. Each chapter is one writing document.
                   </p>
-                  <Link
-                    href={`/novel/${novelId}/overview`}
-                    className="mt-4 inline-block rounded-md bg-accent px-3 py-1.5 text-sm text-bg"
+                  <button
+                    type="button"
+                    className="mt-4 rounded-md bg-accent px-3 py-1.5 text-sm text-bg"
+                    onClick={() => void addAct()}
                   >
-                    Open Overview
-                  </Link>
+                    Add Act 1
+                  </button>
                 </div>
-              ) : null}
-
-              {data.acts.map((act) => (
-                <section key={act.id} className="mb-12">
+              ) : activeChapter ? (
+                <>
                   <header className="mb-6 border-b border-border pb-4">
-                    <h1 className="font-display text-4xl leading-tight tracking-tight">
-                      {act.title}
+                    <p className="text-xs uppercase tracking-wide text-muted">
+                      {activeChapter.actTitle}
+                    </p>
+                    <h1 className="mt-1 font-display text-4xl leading-tight tracking-tight">
+                      {activeChapter.title}
                     </h1>
-                    {act.brief ? (
-                      <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted">
-                        {act.brief}
+                    {activeChapter.goal ? (
+                      <p className="mt-3 max-w-prose text-sm italic text-muted">
+                        {activeChapter.goal}
                       </p>
                     ) : null}
                   </header>
-                  {act.chapters.map((chapter) => {
-                    const isActiveChapter = activeChapter?.id === chapter.id;
-                    return (
-                      <section
-                        key={chapter.id}
-                        className={`mb-10 scroll-mt-36 rounded-lg transition-colors ${
-                          isActiveChapter ? "bg-surface/25 px-3 py-2 -mx-3" : ""
-                        }`}
-                        data-chapter-id={chapter.id}
-                      >
-                        <div className="mb-3 flex items-baseline justify-between gap-3">
-                          <h2 className="font-serif text-2xl">{chapter.title}</h2>
-                          <button
-                            type="button"
-                            className="shrink-0 text-xs text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                            onClick={() => void createScene(chapter.id)}
-                          >
-                            + Scene
-                          </button>
-                        </div>
-                        {chapter.goal ? (
-                          <p className="mb-4 text-sm italic text-muted">Goal: {chapter.goal}</p>
-                        ) : null}
-                        {chapter.scenes.length === 0 ? (
-                          <p className="mb-4 text-sm text-muted">
-                            No scenes yet.{" "}
-                            <button
-                              type="button"
-                              className="text-accent hover:underline"
-                              onClick={() => void createScene(chapter.id)}
-                            >
-                              Add a scene
-                            </button>
-                          </p>
-                        ) : null}
-                        {chapter.scenes.map((scene) => (
-                          <SceneEditor
-                            key={scene.id}
-                            novelId={novelId}
-                            sceneId={scene.id}
-                            chapterId={chapter.id}
-                            actId={act.id}
-                            initialContent={scene.content}
-                            title={scene.title || "Scene"}
-                            commands={commands}
-                            model={model}
-                            hasApiKey={hasApiKey}
-                            isActive={activeSceneId === scene.id}
-                            onSaved={() => void refresh()}
-                          />
-                        ))}
-                      </section>
-                    );
-                  })}
-                </section>
-              ))}
+                  {prose ? (
+                    <ChapterEditor
+                      key={prose.id}
+                      novelId={novelId}
+                      proseId={prose.id}
+                      chapterId={activeChapter.id}
+                      actId={activeChapter.actId}
+                      initialContent={prose.content}
+                      hasApiKey={hasApiKey}
+                      draftResult={draftResult}
+                      onDraftHandled={() => setDraftResult(null)}
+                      onSaved={() => void refresh()}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted">This chapter has no prose document yet.</p>
+                  )}
+                </>
+              ) : null}
             </div>
           </div>
         </main>
 
         <div
-          className={`min-h-0 ${
-            showCoachMobile ? "flex w-full" : "hidden"
-          } ${showCoachDesktop ? "lg:flex lg:w-auto" : "lg:hidden"}`}
+          className={`${
+            showPlanMobile ? "flex w-full min-h-0 flex-1 flex-col overflow-y-auto" : "hidden"
+          } lg:contents`}
         >
-          {showCoachDesktop || showCoachMobile ? (
-            <CoachPanel
-              key={activeChapter?.id ?? "coach"}
+        {!showBeatsDesktop ? (
+          <RailStrip label="Beats" side="right" onClick={() => setBeatsOpen(true)} />
+        ) : null}
+        <div
+          className={`${showPlanMobile ? "flex min-h-0 w-full flex-1" : "hidden"} ${
+            showBeatsDesktop ? "lg:flex lg:w-auto lg:flex-none" : "lg:hidden"
+          }`}
+        >
+          {showBeatsDesktop || showPlanMobile ? (
+            <BeatsSidebar
+              key={activeChapter?.id ?? "beats"}
               novelId={novelId}
-              sceneId={activeSceneId}
               chapterId={activeChapter?.id ?? null}
               chapterTitle={activeChapter?.title}
               beats={activeChapter?.beats ?? []}
-              model={model}
-              hasApiKey={hasApiKey}
+              onChange={() => void refresh()}
               onCollapse={() => {
-                setCoachOpen(false);
+                setBeatsOpen(false);
                 setMobilePane("manuscript");
               }}
-              onDensity={setDensityLevel}
-              sceneSlidersJson={activeScene?.slidersJson}
-              characters={(data.knowledge ?? []).filter((e) => e.type === "character")}
-              onSaveSceneSliders={(json) => {
-                if (!activeSceneId) return;
-                void fetch(`/api/novels/${novelId}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    action: "updateSceneSliders",
-                    payload: { sceneId: activeSceneId, slidersJson: json },
-                  }),
-                }).then(() => void refresh());
-              }}
-              onPromoteBeat={(content) => {
-                void fetch(`/api/novels/${novelId}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    action: "upsertBeat",
-                    payload: { chapterId: activeChapter?.id, content },
-                  }),
-                }).then(() => void refresh());
-              }}
-              onSyncBeats={(contents) => {
-                if (!activeChapter) return;
-                if (!confirm("Replace this chapter's beats with the reverse-outline lines?")) return;
-                void fetch(`/api/novels/${novelId}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    action: "replaceBeats",
-                    payload: { chapterId: activeChapter.id, contents },
-                  }),
-                }).then(() => void refresh());
-              }}
-              className={showCoachMobile && !showCoachDesktop ? "w-full border-l-0" : undefined}
+              className={showPlanMobile && !showBeatsDesktop ? "w-full border-l-0" : undefined}
             />
           ) : null}
         </div>
 
-        {!showCoachDesktop ? (
-          <div className="hidden shrink-0 flex-col border-l border-border bg-surface/70 lg:flex">
-            <button
-              type="button"
-              className="flex h-full w-10 items-center justify-center px-1 text-xs tracking-wide text-muted transition hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
-              aria-label="Open coach"
-              onClick={() => setCoachOpen(true)}
-            >
-              <span className="ledger-rail-label">Coach</span>
-            </button>
-          </div>
+        {!showSummaryDesktop ? (
+          <RailStrip label="Summary" side="right" onClick={() => setSummaryOpen(true)} />
         ) : null}
-
         <div
-          className={`min-h-0 ${
-            showBeatsMobile ? "flex w-full" : "hidden"
-          } lg:flex lg:w-auto`}
+          className={`${showPlanMobile ? "flex min-h-0 w-full flex-1" : "hidden"} ${
+            showSummaryDesktop ? "lg:flex lg:w-auto lg:flex-none" : "lg:hidden"
+          }`}
         >
-          <BeatsSidebar
-            key={activeChapter?.id ?? "beats"}
-            novelId={novelId}
-            chapterId={activeChapter?.id ?? null}
-            chapterTitle={activeChapter?.title}
-            chapterSummary={activeChapter?.summary ?? ""}
-            beats={activeChapter?.beats ?? []}
-            onChange={() => void refresh()}
-            className={showBeatsMobile ? "w-full border-l-0" : undefined}
-          />
+          {showSummaryDesktop || showPlanMobile ? (
+            <ChapterSummaryRail
+              key={`sum-${activeChapter?.id ?? "none"}`}
+              novelId={novelId}
+              chapterId={activeChapter?.id ?? null}
+              chapterTitle={activeChapter?.title}
+              chapterSummary={activeChapter?.summary ?? ""}
+              onChange={() => void refresh()}
+              onCollapse={() => setSummaryOpen(false)}
+              className={showPlanMobile && !showSummaryDesktop ? "w-full border-l-0" : undefined}
+            />
+          ) : null}
+        </div>
+        </div>
+
+        {!showChatDesktop ? (
+          <RailStrip label="Chat" side="right" onClick={() => setChatOpen(true)} />
+        ) : null}
+        <div
+          className={`${showChatMobile ? "flex w-full" : "hidden"} ${
+            showChatDesktop ? "lg:flex lg:w-auto" : "lg:hidden"
+          }`}
+        >
+          {showChatDesktop || showChatMobile ? (
+            <ChapterChat
+              key={activeChapter?.id ?? "chat"}
+              novelId={novelId}
+              chapterId={activeChapter?.id ?? null}
+              proseId={prose?.id ?? null}
+              commands={commands}
+              model={model}
+              hasApiKey={hasApiKey}
+              onChange={() => void refresh()}
+              onDraft={setDraftResult}
+              onCollapse={() => {
+                setChatOpen(false);
+                setMobilePane("manuscript");
+              }}
+              className={showChatMobile && !showChatDesktop ? "w-full border-l-0" : undefined}
+            />
+          ) : null}
         </div>
       </div>
     </div>

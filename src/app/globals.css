@@ -162,3 +162,14 @@ select:disabled,
     transform: none;
   }
 }
+
+.selection-menu {
+  z-index: 50;
+  display: flex;
+  gap: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 4px;
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}

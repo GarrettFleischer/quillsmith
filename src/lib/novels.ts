@@ -13,6 +13,7 @@ import {
   novels,
   overviewAnswers,
   overviewChatMessages,
+  chapterChatMessages,
   sceneRevisions,
   scenes,
   slashCommands,
@@ -42,6 +43,7 @@ export function createNovel(title: string) {
       updatedAt: ts,
     })
     .run();
+  upsertAct({ novelId, title: "Act 1" });
   return getNovel(novelId)!;
 }
 
@@ -89,7 +91,8 @@ export function getNovelTree(novelId: string) {
           .where(eq(scenes.chapterId, chapter.id))
           .orderBy(asc(scenes.order))
           .all();
-        return { ...chapter, beats: beatRows, scenes: sceneRows };
+        const prose = sceneRows[0] ?? null;
+        return { ...chapter, beats: beatRows, prose, scenes: prose ? [prose] : [] };
       }),
     };
   });
@@ -187,6 +190,11 @@ export function upsertAct(input: {
     })
     .run();
   touchNovel(input.novelId);
+  upsertChapter({
+    actId,
+    novelId: input.novelId,
+    title: "Chapter 1",
+  });
   return db.select().from(acts).where(eq(acts.id, actId)).get()!;
 }
 
@@ -231,13 +239,13 @@ export function upsertChapter(input: {
       goal: input.goal ?? "",
     })
     .run();
-  // default empty scene for writing
+  // default empty prose document for the chapter
   db.insert(scenes)
     .values({
       id: id(),
       chapterId,
       order: 0,
-      title: "Scene 1",
+      title: "",
       content: EMPTY_DOC,
       updatedAt: now(),
     })
@@ -286,8 +294,10 @@ export function upsertBeat(input: {
   return db.select().from(beats).where(eq(beats.id, beatId)).get()!;
 }
 
-export function createScene(chapterId: string, novelId: string, title = "New scene") {
+export function createScene(chapterId: string, novelId: string, title = "") {
   assertChapterInNovel(chapterId, novelId);
+  const existing = getChapterProse(chapterId);
+  if (existing) return existing;
   const db = getDb();
   const max = db
     .select()
@@ -633,6 +643,71 @@ export function sceneBelongsToNovel(sceneId: string, novelId: string) {
   } catch {
     return false;
   }
+}
+
+export function chapterBelongsToNovel(chapterId: string, novelId: string) {
+  try {
+    assertChapterInNovel(chapterId, novelId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getChapterProse(chapterId: string) {
+  return (
+    getDb()
+      .select()
+      .from(scenes)
+      .where(eq(scenes.chapterId, chapterId))
+      .orderBy(asc(scenes.order))
+      .get() ?? null
+  );
+}
+
+export function ensureChapterProse(chapterId: string, novelId: string) {
+  return getChapterProse(chapterId) ?? createScene(chapterId, novelId, "");
+}
+
+export function listChapterChat(novelId: string, chapterId: string) {
+  return getDb()
+    .select()
+    .from(chapterChatMessages)
+    .where(
+      and(
+        eq(chapterChatMessages.novelId, novelId),
+        eq(chapterChatMessages.chapterId, chapterId),
+      ),
+    )
+    .orderBy(asc(chapterChatMessages.createdAt))
+    .all();
+}
+
+export function addChapterChatMessage(
+  novelId: string,
+  chapterId: string,
+  role: string,
+  content: string,
+  metaJson = "",
+) {
+  const msgId = id();
+  getDb()
+    .insert(chapterChatMessages)
+    .values({
+      id: msgId,
+      novelId,
+      chapterId,
+      role,
+      content,
+      metaJson,
+      createdAt: now(),
+    })
+    .run();
+  return getDb()
+    .select()
+    .from(chapterChatMessages)
+    .where(eq(chapterChatMessages.id, msgId))
+    .get()!;
 }
 
 export function knowledgeBelongsToNovel(entryId: string, novelId: string) {

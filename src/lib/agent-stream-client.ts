@@ -14,6 +14,7 @@ export type AgentStreamState = {
   status: string;
   stopped: boolean;
   apply?: "append" | "replace";
+  draft?: { text: string; apply: "append" | "replace" };
 };
 
 type StreamEvent = {
@@ -65,7 +66,12 @@ function applyToolEvent(
 export async function consumeAgentStream(
   response: Response,
   onUpdate: (state: AgentStreamState) => void,
-): Promise<{ output: string; stopped: boolean; apply?: "append" | "replace" }> {
+): Promise<{
+  output: string;
+  stopped: boolean;
+  apply?: "append" | "replace";
+  draft?: { text: string; apply: "append" | "replace" };
+}> {
   if (!response.body) throw new Error("No response body");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -110,6 +116,11 @@ export async function consumeAgentStream(
           args: event.args,
           preview: event.preview,
         });
+      } else if (event.type === "draft" && event.text) {
+        state.draft = {
+          text: event.text,
+          apply: event.apply === "append" ? "append" : "replace",
+        };
       } else if (event.type === "done") {
         state.output = event.text || state.output;
         state.status = "";
@@ -121,7 +132,12 @@ export async function consumeAgentStream(
     }
   }
 
-  return { output: state.output, stopped: state.stopped, apply: state.apply };
+  return {
+    output: state.output,
+    stopped: state.stopped,
+    apply: state.apply,
+    draft: state.draft,
+  };
 }
 
 export async function stopAgentRun(runId: string) {

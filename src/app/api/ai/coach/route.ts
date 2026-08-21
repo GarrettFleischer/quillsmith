@@ -51,6 +51,7 @@ export async function POST(req: Request) {
       exemplar?: string;
       sessionId?: string;
       persist?: boolean;
+      passage?: string;
     };
 
     if (!isAiTaskId(body.task)) {
@@ -99,6 +100,7 @@ export async function POST(req: Request) {
 
     const scenePlain = scene ? plainFromTipTap(scene.content) : "";
     const chapterPlain = chapterScenes.map((s) => plainFromTipTap(s.content)).join("\n\n");
+    const passageOverride = body.passage?.trim() || "";
     const { model, temperature } = resolveTaskRuntime(taskId, body.model);
     const tellId = tellIdFromScrubTask(taskId);
     const checkId = checkIdFromTask(taskId);
@@ -198,6 +200,7 @@ ${scenePlain || "(empty — use beats)"}`;
 Scene-relevant notes and current prose:
 ${scenePlain || "(blank page — brief from beats only)"}`;
     } else if (checkId || taskId === "check_apply") {
+      const passage = passageOverride || scenePlain;
       userContent =
         checkMode === "apply" || taskId === "check_apply"
           ? `Apply this improvement plan. Change nothing else.
@@ -207,15 +210,15 @@ ${body.improvementPlan?.trim() || body.message?.trim() || "(none)"}
 </plan>
 
 <passage>
-${scenePlain}
+${passage}
 </passage>`
           : `Run this single check. Return JSON only.
 
 <passage>
-${scenePlain}
+${passage}
 </passage>`;
     } else if (taskId === "analyze_density" || tellId) {
-      const target = scenePlain || chapterPlain;
+      const target = passageOverride || scenePlain || chapterPlain;
       userContent =
         body.scrubMode === "rewrite" && tellId
           ? `Rewrite this passage to remove ${tellId} only.\n\n<passage>\n${target}\n</passage>`
@@ -287,7 +290,11 @@ ${scenePlain}
         hits = [];
       }
       const thresholds = parseDensityThresholds(getSettings().densityThresholdsJson);
-      const report = analyzePassageDensity(scenePlain || chapterPlain, hits, thresholds);
+      const report = analyzePassageDensity(
+        passageOverride || scenePlain || chapterPlain,
+        hits,
+        thresholds,
+      );
       if (body.persist !== false) {
         const session = saveCoachSession({
           id: body.sessionId,

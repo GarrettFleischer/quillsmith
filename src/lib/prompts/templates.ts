@@ -15,10 +15,10 @@ export const EXPAND_TEMPLATE = `Take into account the following glossary of char
 {{sceneInstructions}}
 
 Quality bar:
-- Match the voice of <currentScene> (or <previousScene> if current is empty) before adding flourish.
+- Match the voice of <currentChapter> (or <previousChapter> if current is empty) before adding flourish.
 - Dramatize beats; do not announce them.
 - Prefer stopping early over padding once the beats above are covered.
-- Do not write events belonging to <nextScene> or later outline chapters.
+- Do not write events belonging to <nextChapter> or later outline chapters.
 
 Here is additional context to help you with your answer:
 <additionalContext>
@@ -41,41 +41,43 @@ Current act outline (continuity and spoiler map only - do not write ahead):
 </additionalContext>
 
 Neighboring prose:
-<previousScene>
-{{previousScene}}
-</previousScene>
+<previousChapter>
+{{previousChapter}}
+</previousChapter>
 
-<currentScene>
-{{currentScene}}
-</currentScene>
+<currentChapter>
+{{currentChapter}}
+</currentChapter>
 
 Voice anchor (continue from here; do not repeat):
 <voiceAnchor>
 {{voiceAnchor}}
 </voiceAnchor>
 
-<nextScene>
-{{nextScene}}
-</nextScene>
+<nextChapter>
+{{nextChapter}}
+</nextChapter>
 
 Mention-relevant knowledge excerpts:
+{{mentionedCodex}}
+
 {{knowledge}}
 
-Continue from the end of the current scene. Cover only the beats/instructions above. Prefer stopping early over padding.`;
+Continue from the end of the current chapter. Cover only the beats/instructions above. Prefer stopping early over padding.`;
 
-/** User message for /rewrite: the scene text to condense. Length target lives in the system prompt. */
-export const REWRITE_TEMPLATE = `{{currentScene}}`;
+/** User message for rewrite: the chapter text to condense. Length target lives in the system prompt. */
+export const REWRITE_TEMPLATE = `{{currentChapter}}`;
 
-export const DENSITY_TEMPLATE = `Count AI-tell pattern density in this scene. Return JSON hits only.
+export const DENSITY_TEMPLATE = `Count AI-tell pattern density in this chapter. Return JSON hits only.
 
 <passage>
-{{currentScene}}
+{{currentChapter}}
 </passage>`;
 
-export const SCRUB_TEMPLATE = `Inspect this scene for the focused tell. Return JSON hits only unless asked to rewrite.
+export const SCRUB_TEMPLATE = `Inspect this chapter for the focused tell. Return JSON hits only unless asked to rewrite.
 
 <passage>
-{{currentScene}}
+{{currentChapter}}
 </passage>
 
 {{userInstruction}}`;
@@ -85,7 +87,7 @@ export const CHECK_PLAN_TEMPLATE = `Run this single check. Return an improvement
 Check: {{checkFocus}}
 
 <passage>
-{{currentScene}}
+{{currentChapter}}
 </passage>`;
 
 export const CHECK_APPLY_TEMPLATE = `Apply this improvement plan. Change nothing else.
@@ -95,7 +97,7 @@ export const CHECK_APPLY_TEMPLATE = `Apply this improvement plan. Change nothing
 </plan>
 
 <passage>
-{{currentScene}}
+{{currentChapter}}
 </passage>`;
 
 export const BUILTIN_COMMANDS = [
@@ -103,7 +105,7 @@ export const BUILTIN_COMMANDS = [
     slug: "expand",
     label: "Expand",
     description:
-      "Craft pipeline: curate lore, set sliders, layer models, then run checks — then continue the scene",
+      "Craft pipeline: curate lore, set sliders, layer models, then run checks — then continue the chapter",
     defaultTemperature: 0.75,
     promptTemplate: EXPAND_TEMPLATE,
     enableTools: "true",
@@ -111,7 +113,7 @@ export const BUILTIN_COMMANDS = [
   {
     slug: "rewrite",
     label: "Rewrite",
-    description: "Condense the scene to a target length while matching voice",
+    description: "Condense the chapter to a target length while matching voice",
     defaultTemperature: 0.35,
     promptTemplate: REWRITE_TEMPLATE,
     enableTools: "false",
@@ -119,7 +121,7 @@ export const BUILTIN_COMMANDS = [
   {
     slug: "density",
     label: "Density",
-    description: "Count stacked AI-tell patterns in this scene (not a detector score)",
+    description: "Count stacked AI-tell patterns in this chapter (not a detector score)",
     defaultTemperature: 0.15,
     promptTemplate: DENSITY_TEMPLATE,
     enableTools: "false",
@@ -248,6 +250,7 @@ export const BUILTIN_COMMANDS = [
 
 export const PROSE_TEMPLATE_PLACEHOLDERS = [
   "codex",
+  "mentionedCodex",
   "taskLead",
   "sceneInstructions",
   "novelMeta",
@@ -262,7 +265,11 @@ export const PROSE_TEMPLATE_PLACEHOLDERS = [
   "chapterTitle",
   "chapterGoal",
   "chapterBeats",
+  "chapterSummary",
   "actBrief",
+  "previousChapter",
+  "currentChapter",
+  "nextChapter",
   "previousScene",
   "currentScene",
   "voiceAnchor",
@@ -270,6 +277,7 @@ export const PROSE_TEMPLATE_PLACEHOLDERS = [
   "chapterText",
   "novelPremise",
   "knowledge",
+  "selection",
   "userInstruction",
   "lengthInstructions",
 ] as const;

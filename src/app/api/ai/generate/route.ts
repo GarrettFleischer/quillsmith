@@ -15,9 +15,11 @@ import {
   getCommandOverride,
   getNovelTree,
   getSettings,
+  getChapterProse,
   listKnowledge,
   listOverviewAnswers,
   sceneBelongsToNovel,
+  chapterBelongsToNovel,
   updateSceneSliders,
 } from "@/lib/novels";
 import { knowledgeForSceneText } from "@/lib/mentions";
@@ -90,8 +92,10 @@ export async function POST(req: Request) {
     const body = (await req.json()) as {
       commandSlug: string;
       novelId: string;
-      sceneId: string;
+      sceneId?: string;
+      chapterId?: string;
       instruction: string;
+      selection?: string;
       model?: string;
       wordTarget?: number;
       scrubMode?: "identify" | "rewrite";
@@ -132,10 +136,16 @@ export async function POST(req: Request) {
 
     const db = getDb();
     const tree = getNovelTree(body.novelId);
-    if (!tree || !sceneBelongsToNovel(body.sceneId, body.novelId)) {
-      return Response.json({ error: "Novel or scene not found" }, { status: 404 });
+    const proseId =
+      body.sceneId ||
+      (body.chapterId ? getChapterProse(body.chapterId)?.id : undefined);
+    if (!tree || !proseId || !sceneBelongsToNovel(proseId, body.novelId)) {
+      return Response.json({ error: "Novel or chapter not found" }, { status: 404 });
     }
-    const scene = db.select().from(scenes).where(eq(scenes.id, body.sceneId)).get()!;
+    if (body.chapterId && !chapterBelongsToNovel(body.chapterId, body.novelId)) {
+      return Response.json({ error: "Chapter not found" }, { status: 404 });
+    }
+    const scene = db.select().from(scenes).where(eq(scenes.id, proseId)).get()!;
 
     const chapter = db.select().from(chapters).where(eq(chapters.id, scene.chapterId)).get()!;
     const act = db.select().from(acts).where(eq(acts.id, chapter.actId)).get()!;
@@ -145,15 +155,14 @@ export async function POST(req: Request) {
       .where(eq(beats.chapterId, chapter.id))
       .orderBy(asc(beats.order))
       .all();
-    const siblingScenes = db
-      .select()
-      .from(scenes)
-      .where(eq(scenes.chapterId, chapter.id))
-      .orderBy(asc(scenes.order))
-      .all();
-    const idx = siblingScenes.findIndex((s) => s.id === scene.id);
-    const prev = siblingScenes[idx - 1];
-    const next = siblingScenes[idx + 1];
+    const ordered = tree.acts.flatMap((a) =>
+      a.chapters.map((c) => ({ act: a, chapter: c })),
+    );
+    const idx = ordered.findIndex((row) => row.chapter.id === chapter.id);
+    const prevChapter = idx > 0 ? ordered[idx - 1]?.chapter : undefined;
+    const nextChapter = idx >= 0 ? ordered[idx + 1]?.chapter : undefined;
+    const prevProse = prevChapter?.prose ?? prevChapter?.scenes[0];
+    const nextProse = nextChapter?.prose ?? nextChapter?.scenes[0];
 
     const currentPlain = plainFromTipTap(scene.content);
     const matchText = sceneMatchText([
@@ -164,10 +173,14 @@ export async function POST(req: Request) {
       currentPlain,
       ...chapterBeats.map((b) => b.content),
     ]);
-    const mentionKb = knowledgeForSceneText(body.novelId, matchText);
+    const mentionKb = knowledgeForSceneText(
+      body.novelId,
+      sceneMatchText([matchText, body.selection]),
+    );
     const allKnowledge = listKnowledge(body.novelId);
     const answers = listOverviewAnswers(body.novelId);
-    const previousPlain = prev ? clip(plainFromTipTap(prev.content)) : "";
+    const previousPlain = prevProse ? clip(plainFromTipTap(prevProse.content)) : "";
+    const nextPlain = nextProse ? clip(plainFromTipTap(nextProse.content)) : "";
 
     const parsedWords =
       typeof body.wordTarget === "number" && body.wordTarget > 0
@@ -191,14 +204,14 @@ export async function POST(req: Request) {
     })();
     const taskLead =
       kind === "layer" || (kind === "expand" && craftOn)
-        ? "Produce this layer of the scene from the materials below."
+        ? "Produce this layer of the chapter from the materials below."
         : kind === "expand"
           ? wordTarget
             ? `Write up to about ${wordTarget} words that continue the story, using the following instructions. Stop early if the beats are covered sooner:`
             : `Continue the story using the following instructions. Stop once the beats are covered; never pad:`
           : wordTarget
-            ? `Condense the current scene to about ${wordTarget} words:`
-            : `Condense the current scene:`;
+            ? `Condense the current chapter to about ${wordTarget} words:`
+            : `Condense the current chapter:`;
 
     const styleGuide = buildStyleGuideBlock(tree.novel.styleGuideJson);
 
@@ -224,25 +237,31 @@ export async function POST(req: Request) {
         chapterBeats,
         userInstruction: body.instruction,
         answers,
-        sceneTitle: scene.title,
+        sceneTitle: chapter.title,
         hasExistingProse: Boolean(currentPlain.trim()),
       }),
       codex: buildCodex(kb),
+      mentionedCodex: buildCodex(mentionKb),
       outline: buildOutlineXml(tree),
       storySoFar: buildStorySoFar(tree, chapter.id),
       currentActOutline: buildCurrentActOutline(tree, act.title),
       novelMeta: buildNovelMeta(tree, answers),
       currentScene: currentPlain,
+      currentChapter: currentPlain,
       voiceAnchor: buildVoiceAnchor(currentPlain, previousPlain),
       previousScene: previousPlain,
-      nextScene: next
-        ? clip(plainFromTipTap(next.content)) ||
-          `(untitled next scene${next.title ? `: ${next.title}` : ""} - do not write this yet)`
-        : "(none - do not invent a following scene)",
-      chapterText: siblingScenes.map((s) => plainFromTipTap(s.content)).join("\n\n"),
+      previousChapter: previousPlain,
+      nextScene: nextPlain || "(none - do not invent a following chapter)",
+      nextChapter: nextPlain
+        ? nextPlain ||
+          `(next chapter${nextChapter?.title ? `: ${nextChapter.title}` : ""} - do not write this yet)`
+        : "(none - do not invent a following chapter)",
+      chapterText: currentPlain,
       chapterBeats: chapterBeats.map((b, i) => `${i + 1}. ${b.content}`).join("\n"),
+      chapterSummary: chapter.summary ?? "",
       chapterGoal: chapter.goal ?? "",
       chapterTitle: chapter.title,
+      selection: body.selection?.trim() || "",
       actTitle: act.title,
       actBrief: [
         act.brief,
@@ -311,7 +330,7 @@ export async function POST(req: Request) {
           );
           if (sceneHasPhysics(merged)) {
             slidersJson = stringifySceneSliders(merged);
-            updateSceneSliders(body.sceneId, body.novelId, slidersJson);
+            updateSceneSliders(proseId, body.novelId, slidersJson);
           }
         }
       }
