@@ -2,9 +2,15 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconBook, IconCaret, IconChevron, IconDoc, IconPlus } from "@/components/codex-icons";
+import { IconBook, IconCaret, IconChevron, IconDoc, IconPlus, IconTrash } from "@/components/codex-icons";
 import { entrySnippet } from "@/lib/codex-ui";
-import { actLabel, chapterLabel, findChapterPlace } from "@/lib/manuscript";
+import {
+  actLabel,
+  actName as customActName,
+  chapterLabel,
+  chapterName as customChapterName,
+  findChapterPlace,
+} from "@/lib/manuscript";
 
 export type ManuscriptChapter = {
   id: string;
@@ -28,6 +34,10 @@ export function ManuscriptMenu({
   onAddChapter,
   onMoveAct,
   onMoveChapter,
+  onRenameAct,
+  onRenameChapter,
+  onDeleteAct,
+  onDeleteChapter,
 }: {
   acts: ManuscriptAct[];
   activeChapterId: string;
@@ -36,9 +46,14 @@ export function ManuscriptMenu({
   onAddChapter: (actId: string) => void;
   onMoveAct: (actIndex: number, dir: -1 | 1) => void;
   onMoveChapter: (actIndex: number, chapterIndex: number, dir: -1 | 1) => void;
+  onRenameAct: (actId: string, title: string) => void;
+  onRenameChapter: (chapterId: string, title: string) => void;
+  onDeleteAct: (actId: string) => void;
+  onDeleteChapter: (chapterId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [editing, setEditing] = useState<{ kind: "act" | "chapter"; id: string } | null>(null);
   const [pos, setPos] = useState({ top: 0, left: 0, maxHeight: 420 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -77,6 +92,10 @@ export function ManuscriptMenu({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
+        if (editing) {
+          setEditing(null);
+          return;
+        }
         setOpen(false);
         triggerRef.current?.focus();
       }
@@ -85,6 +104,7 @@ export function ManuscriptMenu({
       const target = e.target as Node;
       if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setOpen(false);
+      setEditing(null);
     }
     function onReposition() {
       place();
@@ -99,7 +119,7 @@ export function ManuscriptMenu({
       window.removeEventListener("resize", onReposition);
       window.removeEventListener("scroll", onReposition, true);
     };
-  }, [open]);
+  }, [open, editing]);
 
   return (
     <div className="min-w-0">
@@ -144,37 +164,61 @@ export function ManuscriptMenu({
                 ) : (
                   acts.map((act, actIndex) => {
                     const expanded = !collapsed[act.id];
-                    const actName = actLabel(actIndex, act.title);
+                    const labeledAct = actLabel(actIndex, act.title);
                     return (
                       <section key={act.id} className={actIndex === 0 ? "" : "mt-2"}>
                         <div className="flex items-center gap-0.5 px-1">
+                          {editing?.kind === "act" && editing.id === act.id ? (
+                            <InlineRename
+                              value={customActName(act.title)}
+                              placeholder={`Act ${actIndex + 1}`}
+                              onSave={(title) => {
+                                onRenameAct(act.id, title);
+                                setEditing(null);
+                              }}
+                              onCancel={() => setEditing(null)}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              aria-expanded={expanded}
+                              className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-1 text-left text-xs uppercase tracking-wide text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                              onClick={() => setCollapsed((c) => ({ ...c, [act.id]: !c[act.id] }))}
+                              onDoubleClick={(e) => {
+                                e.preventDefault();
+                                setEditing({ kind: "act", id: act.id });
+                              }}
+                            >
+                              <IconChevron className="h-3 w-3 shrink-0" open={expanded} />
+                              <IconBook className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">
+                                {labeledAct} ({act.chapters.length})
+                              </span>
+                            </button>
+                          )}
                           <button
                             type="button"
-                            aria-expanded={expanded}
-                            className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-1 text-left text-[11px] uppercase tracking-wide text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                            onClick={() => setCollapsed((c) => ({ ...c, [act.id]: !c[act.id] }))}
-                          >
-                            <IconChevron className="h-3 w-3 shrink-0" open={expanded} />
-                            <IconBook className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">
-                              {actName} ({act.chapters.length})
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Add chapter to ${actName}`}
+                            aria-label={`Add chapter to ${labeledAct}`}
                             className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                             onClick={() => onAddChapter(act.id)}
                           >
                             <IconPlus className="h-3.5 w-3.5" />
                           </button>
                           <MovePair
-                            label={actName}
+                            label={labeledAct}
                             canUp={actIndex > 0}
                             canDown={actIndex < acts.length - 1}
                             onUp={() => onMoveAct(actIndex, -1)}
                             onDown={() => onMoveAct(actIndex, 1)}
                           />
+                          <button
+                            type="button"
+                            aria-label={`Delete ${labeledAct}`}
+                            className="rounded p-1 text-muted hover:bg-surface-2 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            onClick={() => onDeleteAct(act.id)}
+                          >
+                            <IconTrash className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                         {expanded ? (
                           act.chapters.length === 0 ? (
@@ -185,41 +229,72 @@ export function ManuscriptMenu({
                               const chName = chapterLabel(chapterIndex, ch.title);
                               const snippet =
                                 ch.goal || ch.summary ? entrySnippet(ch.goal, ch.summary) : "";
+                              const editingChapter =
+                                editing?.kind === "chapter" && editing.id === ch.id;
                               return (
                                 <div key={ch.id} className="flex items-start gap-0.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      onSelectChapter(ch.id);
-                                      setOpen(false);
-                                    }}
-                                    className={`mb-0.5 flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
-                                      selected ? "bg-accent-soft ring-1 ring-accent/40" : "hover:bg-surface-2"
-                                    }`}
-                                  >
-                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg text-muted">
-                                      <IconDoc className="h-4 w-4" />
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                      <span className={`block truncate text-sm ${selected ? "text-accent" : ""}`}>
-                                        {chName}
+                                  {editingChapter ? (
+                                    <div className="mb-0.5 min-w-0 flex-1 px-2 py-1">
+                                      <InlineRename
+                                        value={customChapterName(ch.title)}
+                                        placeholder={`Chapter ${chapterIndex + 1}`}
+                                        onSave={(title) => {
+                                          onRenameChapter(ch.id, title);
+                                          setEditing(null);
+                                        }}
+                                        onCancel={() => setEditing(null)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => onSelectChapter(ch.id)}
+                                      onDoubleClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setEditing({ kind: "chapter", id: ch.id });
+                                      }}
+                                      className={`mb-0.5 flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
+                                        selected
+                                          ? "bg-accent-soft ring-1 ring-accent/40"
+                                          : "hover:bg-surface-2"
+                                      }`}
+                                    >
+                                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg text-muted">
+                                        <IconDoc className="h-4 w-4" />
                                       </span>
-                                      {snippet ? (
-                                        <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">
-                                          {snippet}
+                                      <span className="min-w-0 flex-1">
+                                        <span
+                                          className={`block truncate text-sm ${selected ? "text-accent" : ""}`}
+                                        >
+                                          {chName}
                                         </span>
-                                      ) : null}
-                                    </span>
-                                  </button>
+                                        {snippet ? (
+                                          <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted">
+                                            {snippet}
+                                          </span>
+                                        ) : null}
+                                      </span>
+                                    </button>
+                                  )}
                                   <MovePair
                                     label={chName}
                                     canUp={chapterIndex > 0 || actIndex > 0}
                                     canDown={
-                                      chapterIndex < act.chapters.length - 1 || actIndex < acts.length - 1
+                                      chapterIndex < act.chapters.length - 1 ||
+                                      actIndex < acts.length - 1
                                     }
                                     onUp={() => onMoveChapter(actIndex, chapterIndex, -1)}
                                     onDown={() => onMoveChapter(actIndex, chapterIndex, 1)}
                                   />
+                                  <button
+                                    type="button"
+                                    aria-label={`Delete ${chName}`}
+                                    className="rounded p-1 text-muted hover:bg-surface-2 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                                    onClick={() => onDeleteChapter(ch.id)}
+                                  >
+                                    <IconTrash className="h-3.5 w-3.5" />
+                                  </button>
                                 </div>
                               );
                             })
@@ -235,6 +310,40 @@ export function ManuscriptMenu({
           )
         : null}
     </div>
+  );
+}
+
+function InlineRename({
+  value,
+  placeholder,
+  onSave,
+  onCancel,
+}: {
+  value: string;
+  placeholder: string;
+  onSave: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  return (
+    <input
+      autoFocus
+      className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      value={draft}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => onSave(draft.trim())}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.target as HTMLInputElement).blur();
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+    />
   );
 }
 

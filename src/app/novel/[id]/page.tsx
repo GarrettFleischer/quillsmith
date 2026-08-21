@@ -8,7 +8,9 @@ import { AppHeader } from "@/components/app-header";
 import { BeatsSidebar, type Beat } from "@/components/beats-sidebar";
 import { ChapterChat } from "@/components/chapter-chat";
 import { ChapterEditor, type DraftResult } from "@/components/chapter-editor";
+import { ChapterHeading } from "@/components/chapter-heading";
 import { ChapterSummaryRail } from "@/components/chapter-summary";
+import { IconFocus } from "@/components/codex-icons";
 import { KnowledgeSidebar, type KnowledgeEntry, type StoryFields } from "@/components/knowledge-sidebar";
 import { ManuscriptMenu } from "@/components/manuscript-menu";
 import { RailStrip } from "@/components/rail-strip";
@@ -63,10 +65,11 @@ export default function WritePage() {
   const [model, setModel] = useState("anthropic/claude-sonnet-4");
   const [hasApiKey, setHasApiKey] = useState(true);
   const [draftResult, setDraftResult] = useState<DraftResult | null>(null);
+  const [wordCount, setWordCount] = useState(0);
+  const [saveLabel, setSaveLabel] = useState("");
   const activeChapterId = useEditorStore((s) => s.activeChapterId);
   const setActive = useEditorStore((s) => s.setActive);
   const setNovel = useEditorStore((s) => s.setNovel);
-  const status = useEditorStore((s) => s.status);
   const leftTab = useWorkspaceStore((s) => s.leftTab);
   const leftOpen = useWorkspaceStore((s) => s.leftOpen);
   const setLeftOpen = useWorkspaceStore((s) => s.setLeftOpen);
@@ -76,9 +79,12 @@ export default function WritePage() {
   const setSummaryOpen = useWorkspaceStore((s) => s.setSummaryOpen);
   const chatOpen = useWorkspaceStore((s) => s.chatOpen);
   const setChatOpen = useWorkspaceStore((s) => s.setChatOpen);
+  const toggleFocus = useWorkspaceStore((s) => s.toggleFocus);
   const mobilePane = useWorkspaceStore((s) => s.mobilePane);
   const setMobilePane = useWorkspaceStore((s) => s.setMobilePane);
   const clearCodexWindows = useWorkspaceStore((s) => s.clearCodexWindows);
+  const openCodexWindow = useWorkspaceStore((s) => s.openCodexWindow);
+  const railsOpen = leftOpen || beatsOpen || summaryOpen || chatOpen;
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/novels/${novelId}`);
@@ -270,6 +276,91 @@ export default function WritePage() {
     await refresh();
   }
 
+  function activateFromTree(
+    tree: Tree | null,
+    preferredChapterId?: string | null,
+  ) {
+    if (!tree) return;
+    const chapters = tree.acts.flatMap((act) =>
+      act.chapters.map((ch) => ({
+        chapterId: ch.id,
+        actId: act.id,
+        sceneId: ch.prose?.id ?? ch.scenes[0]?.id ?? null,
+      })),
+    );
+    const preferred = preferredChapterId
+      ? chapters.find((c) => c.chapterId === preferredChapterId)
+      : null;
+    const next = preferred ?? chapters[0];
+    if (next) {
+      setActive(next);
+      return;
+    }
+    setActive({ chapterId: null, actId: null, sceneId: null });
+  }
+
+  async function renameAct(actId: string, title: string) {
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "upsertAct", payload: { id: actId, title } }),
+    });
+    await refresh();
+  }
+
+  async function renameChapter(chapterId: string, title: string) {
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "upsertChapter",
+        payload: { id: chapterId, title },
+      }),
+    });
+    await refresh();
+  }
+
+  async function removeAct(actId: string) {
+    if (!data) return;
+    const act = data.acts.find((a) => a.id === actId);
+    const label = act
+      ? actLabel(data.acts.indexOf(act), act.title)
+      : "this act";
+    if (!confirm(`Delete ${label} and its chapters?`)) return;
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "deleteAct", payload: { actId } }),
+    });
+    const deletingActive = act?.chapters.some((c) => c.id === activeChapterId);
+    const tree = await refresh();
+    activateFromTree(tree, deletingActive ? null : activeChapterId);
+  }
+
+  async function removeChapter(chapterId: string) {
+    if (!data) return;
+    const place = data.acts
+      .flatMap((act, actIndex) =>
+        act.chapters.map((ch, chapterIndex) => ({ act, actIndex, ch, chapterIndex })),
+      )
+      .find((row) => row.ch.id === chapterId);
+    const label = place
+      ? chapterLabel(place.chapterIndex, place.ch.title)
+      : "this chapter";
+    if (!confirm(`Delete ${label}?`)) return;
+    const neighbor =
+      place?.act.chapters[place.chapterIndex + 1]?.id ??
+      place?.act.chapters[place.chapterIndex - 1]?.id ??
+      null;
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "deleteChapter", payload: { chapterId } }),
+    });
+    const tree = await refresh();
+    activateFromTree(tree, neighbor);
+  }
+
   function selectChapter(chapterId: string) {
     const opt = chapterOptions.find((c) => c.id === chapterId);
     if (!opt) return;
@@ -324,6 +415,7 @@ export default function WritePage() {
         novelId={novelId}
         novelTitle={data.novel.title}
         mode="write"
+        onNovelTitleClick={() => openCodexWindow({ kind: "story" })}
         tools={
           <WriteDeskTools
             acts={data.acts.map((act) => ({
@@ -338,14 +430,17 @@ export default function WritePage() {
               })),
             }))}
             activeChapterId={activeChapter?.id ?? ""}
-            model={model}
-            hasApiKey={hasApiKey}
+            focusOn={railsOpen}
             onSelectChapter={selectChapter}
             onAddChapter={(actId) => void addChapter(actId)}
             onAddAct={() => void addAct()}
             onMoveAct={(index, dir) => void moveAct(index, dir)}
             onMoveChapter={(actIndex, chapterIndex, dir) => void moveChapter(actIndex, chapterIndex, dir)}
-            onModelChange={setModel}
+            onRenameAct={(actId, title) => void renameAct(actId, title)}
+            onRenameChapter={(chapterId, title) => void renameChapter(chapterId, title)}
+            onDeleteAct={(actId) => void removeAct(actId)}
+            onDeleteChapter={(chapterId) => void removeChapter(chapterId)}
+            onToggleFocus={toggleFocus}
           />
         }
       />
@@ -410,20 +505,6 @@ export default function WritePage() {
         >
           <div className="mx-auto max-w-3xl px-6 pb-12">
             <div className="pt-8">
-              {status ? (
-                <p className="mb-4 text-sm text-accent" role="status">
-                  {status}
-                </p>
-              ) : null}
-              {!hasApiKey ? (
-                <p className="mb-4 text-xs text-muted">
-                  Add an OpenRouter key in{" "}
-                  <Link href="/settings" className="text-accent hover:underline">
-                    Settings
-                  </Link>{" "}
-                  to use chat and Actions.
-                </p>
-              ) : null}
               {data.acts.length === 0 ? (
                 <div className="rounded-lg border border-border bg-surface/50 p-6 panel-enter">
                   <p className="font-serif text-xl">No chapters yet</p>
@@ -440,19 +521,20 @@ export default function WritePage() {
                 </div>
               ) : activeChapter ? (
                 <>
-                  <header className="mb-6 border-b border-border pb-4">
-                    <p className="text-xs uppercase tracking-wide text-muted">
-                      {actLabel(activeChapter.actIndex, activeChapter.actTitle)}
-                    </p>
-                    <h1 className="mt-1 font-display text-4xl leading-tight tracking-tight">
-                      {chapterLabel(activeChapter.chapterIndex, activeChapter.title)}
-                    </h1>
-                    {activeChapter.goal ? (
-                      <p className="mt-3 max-w-prose text-sm italic text-muted">
-                        {activeChapter.goal}
-                      </p>
-                    ) : null}
-                  </header>
+                  <ChapterHeading
+                    key={activeChapter.id}
+                    novelId={novelId}
+                    actId={activeChapter.actId}
+                    actIndex={activeChapter.actIndex}
+                    actTitle={activeChapter.actTitle}
+                    chapterId={activeChapter.id}
+                    chapterIndex={activeChapter.chapterIndex}
+                    chapterTitle={activeChapter.title}
+                    chapterGoal={activeChapter.goal}
+                    wordCount={wordCount}
+                    saveLabel={saveLabel}
+                    onChange={() => void refresh()}
+                  />
                   {prose ? (
                     <ChapterEditor
                       key={prose.id}
@@ -465,6 +547,10 @@ export default function WritePage() {
                       draftResult={draftResult}
                       onDraftHandled={() => setDraftResult(null)}
                       onSaved={() => void refresh()}
+                      onMeta={({ words, saveLabel: next }) => {
+                        setWordCount(words);
+                        setSaveLabel(next);
+                      }}
                     />
                   ) : (
                     <p className="text-sm text-muted">This chapter has no prose document yet.</p>
@@ -552,6 +638,7 @@ export default function WritePage() {
               proseId={prose?.id ?? null}
               commands={commands}
               model={model}
+              onModelChange={setModel}
               hasApiKey={hasApiKey}
               onChange={() => void refresh()}
               onDraft={setDraftResult}
@@ -580,14 +667,17 @@ export default function WritePage() {
 function WriteDeskTools({
   acts,
   activeChapterId,
-  model,
-  hasApiKey,
+  focusOn,
   onSelectChapter,
   onAddChapter,
   onAddAct,
   onMoveAct,
   onMoveChapter,
-  onModelChange,
+  onRenameAct,
+  onRenameChapter,
+  onDeleteAct,
+  onDeleteChapter,
+  onToggleFocus,
 }: {
   acts: Array<{
     id: string;
@@ -601,14 +691,17 @@ function WriteDeskTools({
     }>;
   }>;
   activeChapterId: string;
-  model: string;
-  hasApiKey: boolean;
+  focusOn: boolean;
   onSelectChapter: (chapterId: string) => void;
   onAddChapter: (actId: string) => void;
   onAddAct: () => void;
   onMoveAct: (actIndex: number, dir: -1 | 1) => void;
   onMoveChapter: (actIndex: number, chapterIndex: number, dir: -1 | 1) => void;
-  onModelChange: (model: string) => void;
+  onRenameAct: (actId: string, title: string) => void;
+  onRenameChapter: (chapterId: string, title: string) => void;
+  onDeleteAct: (actId: string) => void;
+  onDeleteChapter: (chapterId: string) => void;
+  onToggleFocus: () => void;
 }) {
   return (
     <>
@@ -620,18 +713,21 @@ function WriteDeskTools({
         onAddChapter={onAddChapter}
         onMoveAct={onMoveAct}
         onMoveChapter={onMoveChapter}
+        onRenameAct={onRenameAct}
+        onRenameChapter={onRenameChapter}
+        onDeleteAct={onDeleteAct}
+        onDeleteChapter={onDeleteChapter}
       />
-      <label className="hidden min-w-0 lg:block">
-        <span className="sr-only">Model</span>
-        <input
-          className="w-40 rounded border border-border bg-surface px-2 py-1 text-sm text-text hover:text-text disabled:opacity-50 disabled:hover:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          value={model}
-          disabled={!hasApiKey}
-          onChange={(e) => onModelChange(e.target.value)}
-          spellCheck={false}
-          aria-label="Model"
-        />
-      </label>
+      <button
+        type="button"
+        aria-pressed={!focusOn}
+        title={focusOn ? "Hide rails" : "Show rails"}
+        className="flex items-center gap-1.5 rounded border border-border bg-surface px-2 py-1 text-sm text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        onClick={onToggleFocus}
+      >
+        <IconFocus className="h-3.5 w-3.5" />
+        {focusOn ? "Focus" : "Desk"}
+      </button>
     </>
   );
 }

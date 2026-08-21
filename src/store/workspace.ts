@@ -31,12 +31,20 @@ export function isActionTarget(target: SheetTarget): target is ActionTarget {
   return target.kind === "action" || target.kind === "new-action";
 }
 
+type RailSnapshot = {
+  leftOpen: boolean;
+  beatsOpen: boolean;
+  summaryOpen: boolean;
+  chatOpen: boolean;
+};
+
 type WorkspaceState = {
   leftTab: LeftTab;
   leftOpen: boolean;
   beatsOpen: boolean;
   summaryOpen: boolean;
   chatOpen: boolean;
+  railsSnapshot: RailSnapshot | null;
   mobilePane: MobilePane;
   selection: string | null;
   actionSlug: string | null;
@@ -47,6 +55,7 @@ type WorkspaceState = {
   setBeatsOpen: (open: boolean) => void;
   setSummaryOpen: (open: boolean) => void;
   setChatOpen: (open: boolean) => void;
+  toggleFocus: () => void;
   setMobilePane: (pane: MobilePane) => void;
   sendSelectionToChat: (text: string) => void;
   setActionSlug: (slug: string | null) => void;
@@ -140,7 +149,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   leftOpen: true,
   beatsOpen: false,
   summaryOpen: false,
-  chatOpen: true,
+  chatOpen: false,
+  railsSnapshot: null,
   mobilePane: "manuscript",
   selection: null,
   actionSlug: null,
@@ -151,6 +161,31 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setBeatsOpen: (beatsOpen) => set({ beatsOpen }),
   setSummaryOpen: (summaryOpen) => set({ summaryOpen }),
   setChatOpen: (chatOpen) => set({ chatOpen }),
+  toggleFocus: () =>
+    set((s) => {
+      const anyOpen = s.leftOpen || s.beatsOpen || s.summaryOpen || s.chatOpen;
+      if (anyOpen) {
+        return {
+          railsSnapshot: {
+            leftOpen: s.leftOpen,
+            beatsOpen: s.beatsOpen,
+            summaryOpen: s.summaryOpen,
+            chatOpen: s.chatOpen,
+          },
+          leftOpen: false,
+          beatsOpen: false,
+          summaryOpen: false,
+          chatOpen: false,
+        };
+      }
+      const snap = s.railsSnapshot ?? {
+        leftOpen: true,
+        beatsOpen: false,
+        summaryOpen: false,
+        chatOpen: false,
+      };
+      return { ...snap, railsSnapshot: null };
+    }),
   setMobilePane: (mobilePane) => set({ mobilePane }),
   sendSelectionToChat: (text) =>
     set({

@@ -82,7 +82,7 @@ export function FloatingPane({
     return () => window.removeEventListener("keydown", onKey);
   }, [focused, pinned, onClose]);
 
-  function clampPos(nx: number, ny: number, w: number, h: number) {
+  function clampPos(nx: number, ny: number, w: number, _h: number) {
     const maxX = Math.max(8, window.innerWidth - 48);
     const maxY = Math.max(HEADER_H, window.innerHeight - 48);
     return {
@@ -151,15 +151,13 @@ export function FloatingPane({
       aria-modal="false"
       aria-label={title}
       onPointerDown={onFocus}
-      className={`fixed flex flex-col overflow-hidden rounded-lg border bg-surface ${
+      className={`fixed flex flex-col overflow-hidden rounded-md border bg-surface ${
         focused ? "border-accent/50" : "border-border"
       }`}
       style={{
         ...style,
         zIndex: focused ? 39 : 33 + (z % 5),
-        boxShadow: focused
-          ? "0 1px 0 color-mix(in oklab, var(--text) 8%, transparent), 0 18px 40px color-mix(in oklab, var(--text) 16%, transparent)"
-          : "0 1px 0 color-mix(in oklab, var(--text) 8%, transparent), 0 12px 28px color-mix(in oklab, var(--text) 12%, transparent)",
+        boxShadow: "var(--shadow)",
       }}
     >
       <div

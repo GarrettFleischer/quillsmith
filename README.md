@@ -1,20 +1,18 @@
 # Quillsmith
 
-**Plan top-down — acts, chapters, beats — then draft scenes with a knowledge base that stays with the story.**
+**Plan top-down — acts, chapters, beats — then draft each chapter with a Codex that stays with the story.**
 
-Quillsmith is a local-first novel writing workspace. Authors structure a manuscript in Overview mode, draft scenes in Write mode, and keep a per-novel story bible that AI tools can read while generating prose. Everything lives in a SQLite database on your machine — no accounts, no cloud manuscript storage.
+Quillsmith is a local-first novel writing workspace. Authors plan in the Write desk (acts, chapters, beats beside the prose), draft each chapter as one document, and keep a per-novel Codex that AI tools can read while generating. Everything lives in a SQLite database on your machine — no accounts, no cloud manuscript storage.
 
 ## Features
 
-- **Top-down planning** — Acts, chapters, and beats in Overview mode, with a structured question bank and AI overview chat to flesh out premise, stakes, and arc.
-- **Scene drafting** — TipTap editor with autosave, revision history, and slash commands. Expand runs the craft pipeline (curate lore, sliders, layered models, checks) unless you turn it off in Settings.
-- **Coach** — Interview, critique, practice, reverse outline, simulated beta readers, plan-then-apply checks, narrative-physics sliders, and pattern-density counts. Feedback only; you stay the author.
-- **Style guide & chapter summaries** — Document your voice; feed later chapters a story-so-far instead of the whole manuscript.
-- **Slash commands** — `/expand`, `/rewrite`, `/density`, `/scrub-*`, `/check-*` (plan then apply-only), `/layer` (multi-model pipeline).
-- **Knowledge base** — Typed lore entries (characters, places, etc.) with appearance tracking across scenes; `@` mentions pull relevant context into drafts.
-- **Lore-aware AI** — OpenRouter tool-calling loops let the model search knowledge, read outline context, and stay aligned with prior scenes.
-- **Customizable commands** — Edit Action prompts and temperatures in Write → Actions.
-- **Export / import** — JSON and Markdown export for backup and migration.
+- **Chapter desk** — One chapter at a time. Codex and Actions on the left; Beats, Summary, and Chat as collapsible rails. Focus hides every rail.
+- **Manuscript tree** — Acts and chapters in a compact menu: add, rename, reorder, delete. Titles and goals also edit in the chapter heading.
+- **Chapter drafting** — TipTap editor with autosave, word count, and revision history. Expand runs the craft pipeline (curate lore, sliders, layered models, checks) unless you turn it off in Settings.
+- **Chat + Actions** — Highlight **Send to chat**, attach Expand or another saved Action, review rewrite hunks in the chapter. Custom Actions live under Write → Actions.
+- **Codex** — Typed lore (characters, places, items, and more) with appearance tracking; the Story sheet holds premise, style, and the novel title.
+- **Review** — Pattern-density counts and check suggestions for a chapter or the whole book. Not an AI score.
+- **Export** — Markdown and JSON from the header.
 - **Local-first** — SQLite at `data/quillsmith.db` (gitignored). Bring your own OpenRouter API key.
 
 ## Quick start
@@ -40,11 +38,13 @@ bun run db:seed
 
 | Path | Purpose |
 |------|---------|
-| `src/app/novel/[id]/overview` | Top-down planning UI |
-| `src/app/novel/[id]` | Write mode — manuscript, knowledge, Coach, beats |
+| `src/app/page.tsx` | Home — create and open novels |
+| `src/app/novel/[id]` | Write mode — manuscript, Codex, Chat, beats, summary |
+| `src/app/novel/[id]/review` | Review mode — density stats and check suggestions |
+| `src/app/settings` | OpenRouter key, models, drafting pipeline |
 | `src/app/api/ai/*` | OpenRouter generation, coach, summaries, comps |
 | `src/lib/ai-tasks.ts` | Single-job AI task registry |
-| `src/lib/novels.ts` | Novel tree, scenes, knowledge CRUD |
+| `src/lib/novels.ts` | Novel tree, chapters, Codex CRUD |
 | `src/lib/tools.ts` | Agent tool definitions for lore-aware drafting |
 | `src/db/` | SQLite schema, migrations, seed |
 | `design/inspiration/` | Ink Ledger aesthetic brief |
@@ -85,4 +85,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Contributing
 
-Issues and pull requests welcome. This is an early MVP — expect rough edges around large manuscripts and performance with many open scene editors.
+Issues and pull requests welcome. This is an early MVP — expect rough edges around large manuscripts and performance with many open editors.

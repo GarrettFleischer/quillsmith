@@ -26,7 +26,7 @@ Three mechanisms together, not one gimmick:
 ## Operating Context
 
 - **Home** (`/`) — Create and open novels. A new novel starts with Act 1 / Chapter 1 on the Write desk.
-- **Write** (`/novel/[id]`) — Chapter-first desk: Codex | Actions on the left; one chapter editor in the center; collapsible Beats, Summary, and chapter Chat on the right. Highlight **Send to chat**; Action chips attach saved prompts.
+- **Write** (`/novel/[id]`) — Chapter-first desk: Codex | Actions on the left; one chapter editor in the center; collapsible Beats, Summary, and chapter Chat on the right. Chapter titles and goals edit in place. Highlight **Send to chat**; attach a saved Action from Chat. Default: Codex open; Chat, Beats, and Summary collapsed.
 - **Review** (`/novel/[id]/review`) — Autocrit-shaped sibling tab: chapter or book stats (pattern density) and generated check suggestions. Not a panel inside Write.
 - **Settings** (`/settings`) — OpenRouter API key, default model, per-task model routing, model compare, density thresholds, drafting pipeline. Saved Actions are edited in Write → Actions, not here.
 - **Design lab** (`/design/lab`) — Internal aesthetic exploration surface for the Ink Ledger direction.

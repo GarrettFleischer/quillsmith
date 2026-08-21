@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 
 type Novel = {
@@ -45,6 +46,13 @@ export default function HomePage() {
     router.push(`/novel/${novel.id}`);
   }
 
+  async function removeNovel(novel: Novel) {
+    if (!confirm(`Delete “${novel.title}”? This cannot be undone.`)) return;
+    const res = await fetch(`/api/novels?id=${encodeURIComponent(novel.id)}`, { method: "DELETE" });
+    if (!res.ok) return;
+    await refresh();
+  }
+
   return (
     <div className="min-h-full">
       <AppHeader />
@@ -85,11 +93,10 @@ export default function HomePage() {
           ) : (
             <ul className="mt-4 divide-y divide-border border-y border-border">
               {novels.map((n) => (
-                <li key={n.id}>
-                  <button
-                    type="button"
-                    className="flex w-full items-baseline justify-between gap-4 py-4 text-left hover:bg-surface/60"
-                    onClick={() => router.push(`/novel/${n.id}`)}
+                <li key={n.id} className="flex items-baseline gap-3">
+                  <Link
+                    href={`/novel/${n.id}`}
+                    className="flex min-w-0 flex-1 items-baseline justify-between gap-4 py-4 hover:bg-surface/60"
                   >
                     <span>
                       <span className="block font-serif text-lg">{n.title}</span>
@@ -102,6 +109,13 @@ export default function HomePage() {
                     <span className="shrink-0 text-xs text-muted">
                       {new Date(n.updatedAt).toLocaleDateString()}
                     </span>
+                  </Link>
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs text-muted hover:text-danger"
+                    onClick={() => void removeNovel(n)}
+                  >
+                    Delete
                   </button>
                 </li>
               ))}

@@ -107,7 +107,7 @@ Depth is mostly tonal — stepped surfaces and hairline borders — with subtle 
 
 - Warm parchment backgrounds with muted teal-ink accents
 - Three-font stack: Fraunces (brand), Source Serif 4 (manuscript), IBM Plex Sans (controls)
-- Wide-rail Write layout: 280px Codex/Actions | fluid chapter | 240px Beats | 260px Summary | 320px Chat
+- Wide-rail Write layout: 280px Codex/Actions | fluid chapter | 240px Beats | 260px Summary | 320px Chat. Default: Codex open; other rails collapsed.
 - Bordered, modest-radius controls; accent used sparingly on primary actions and selection
 - Flat surfaces at rest; hairline shadows and backdrop blur only on elevated chrome
 - Revision diffs use rewrite/original semantic colors, not generic highlight yellow
@@ -165,7 +165,7 @@ The palette reads as ink on paper: warm neutrals carry most of the UI; teal ink 
 
 ## Layout
 
-**Write mode shell:** full-height flex column — sticky header, then Codex/Actions `280px` | manuscript `flex-1 min-w-0` | Beats `240px` | Summary `260px` | Chat `320px`. Each right rail collapses independently to a 40px strip. Side rails use `bg-surface/70` with `border-r` / `border-l`. Default on typical widths: Codex + Chat open; Beats and Summary collapsed.
+**Write mode shell:** full-height flex column — sticky header, then Codex/Actions `280px` | manuscript `flex-1 min-w-0` | Beats `240px` | Summary `260px` | Chat `320px`. Each right rail collapses independently to a 40px strip. Side rails use `bg-surface/70` with `border-r` / `border-l`. Default on typical widths: Codex open; Chat, Beats, and Summary collapsed. Send to chat opens Chat.
 
 **Manuscript column:** one chapter at a time, `max-w-3xl` centered with `px-6`. Quiet prose column; highlight BubbleMenu for Send to chat — not card soup.
 
@@ -173,7 +173,7 @@ The palette reads as ink on paper: warm neutrals carry most of the UI; teal ink 
 
 **Home & App settings:** single column, `max-w-3xl` or `max-w-5xl`, `px-4 py-12`. Novel list uses divided rows, not card grid.
 
-**Header:** `h-14`, `max-w-[1600px]`, sticky with `border-b`, `bg-bg/90 backdrop-blur-md`. Mode toggle is Write | Review. Write desk tools (manuscript tree menu, model) sit between the toggle and export. The manuscript menu is a compact ledger popover: acts as collapsible groups, chapters as rows, add act/chapter and reorder in the window.
+**Header:** `h-14`, `max-w-[1600px]`, sticky with `border-b`, `bg-bg/90 backdrop-blur-md`. Mode toggle is Write | Review. Write desk tools (manuscript tree menu, Focus) sit between the toggle and export. The manuscript menu is a compact ledger popover: acts as collapsible groups, chapters as rows, add/rename/reorder/delete in the window. Export is a single menu (Markdown / JSON). The model field lives in Chat, not the header.
 
 **Spacing rhythm:** 4px base; common gaps `gap-2` (8px), `gap-3` (12px), `gap-4` (16px); section breaks `mt-8`–`mt-12`.
 

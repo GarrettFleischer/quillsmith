@@ -4,21 +4,27 @@ import { useTheme } from "next-themes";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { IconGear } from "@/components/codex-icons";
+import { ExportMenu } from "@/components/export-menu";
 
 export function AppHeader({
   novelTitle,
   novelId,
   mode,
   tools,
+  onNovelTitleClick,
 }: {
   novelTitle?: string;
   novelId?: string;
   mode?: "write" | "review";
   tools?: ReactNode;
+  onNovelTitleClick?: () => void;
 }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  const titleClass =
+    "hidden max-w-[12rem] truncate font-serif text-lg sm:inline lg:max-w-[18rem]";
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg/90 backdrop-blur-md">
@@ -29,7 +35,18 @@ export function AppHeader({
         {novelTitle ? (
           <div className="flex min-w-0 items-center gap-3">
             <span className="hidden text-muted sm:inline">/</span>
-            <span className="hidden truncate font-serif text-lg sm:inline">{novelTitle}</span>
+            {onNovelTitleClick ? (
+              <button
+                type="button"
+                className={`${titleClass} text-left hover:text-accent`}
+                onClick={onNovelTitleClick}
+                title="Edit story"
+              >
+                {novelTitle}
+              </button>
+            ) : (
+              <span className={titleClass}>{novelTitle}</span>
+            )}
             {novelId && mode ? (
               <nav className="flex shrink-0 rounded-md border border-border bg-surface p-0.5 text-sm">
                 <Link
@@ -60,28 +77,14 @@ export function AppHeader({
           <div className="flex-1" />
         )}
         <div className="flex shrink-0 items-center gap-2 text-sm">
-          {novelId ? (
-            <>
-              <a
-                className="rounded border border-border px-2 py-1 text-muted hover:text-text"
-                href={`/api/novels/${novelId}/export?format=json`}
-              >
-                Export JSON
-              </a>
-              <a
-                className="rounded border border-border px-2 py-1 text-muted hover:text-text"
-                href={`/api/novels/${novelId}/export?format=markdown`}
-              >
-                Export MD
-              </a>
-            </>
-          ) : null}
+          {novelId ? <ExportMenu novelId={novelId} /> : null}
           <Link
             href="/settings"
             className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-muted hover:text-text"
+            aria-label="Settings"
           >
             <IconGear className="h-3.5 w-3.5" />
-            Settings
+            <span className="hidden sm:inline">Settings</span>
           </Link>
           <button
             type="button"
