@@ -1,3 +1,4 @@
+import { actLabel, chapterLabel } from "@/lib/manuscript";
 import {
   CHARACTER_SLIDERS,
   SCENE_SLIDERS,
@@ -106,7 +107,7 @@ export function buildOutlineXml(tree: NovelTree): string {
                 `          <beat n="${bi + 1}">${escapeXml(b.content.trim() || "(empty beat)")}</beat>`,
             )
             .join("\n");
-          return `      <chapter title="${escapeXml(ch.title)}" number="${ci + 1}">
+          return `      <chapter title="${escapeXml(chapterLabel(ci, ch.title))}" number="${ci + 1}">
         <goal>${escapeXml(ch.goal ?? "")}</goal>
         <summary>${escapeXml((ch.summary ?? "").trim() || "")}</summary>
         <beats>
@@ -116,7 +117,7 @@ ${beatLines || "          (none)"}
         })
         .join("\n");
 
-      return `    <act title="${escapeXml(act.title)}" number="${ai + 1}">
+      return `    <act title="${escapeXml(actLabel(ai, act.title))}" number="${ai + 1}">
       <brief>${escapeXml(act.brief ?? "")}</brief>
       <introduces>${escapeXml(act.introduces ?? "")}</introduces>
       <accomplishes>${escapeXml(act.accomplishes ?? "")}</accomplishes>
@@ -198,15 +199,15 @@ export function buildNovelMeta(tree: NovelTree, answers: OverviewAnswer[]): stri
 export function buildStorySoFar(tree: NovelTree, currentChapterId: string): string {
   const lines: string[] = [];
   let passed = false;
-  for (const act of tree.acts) {
-    for (const ch of act.chapters) {
+  for (const [actIndex, act] of tree.acts.entries()) {
+    for (const [chapterIndex, ch] of act.chapters.entries()) {
       if (ch.id && ch.id === currentChapterId) {
         passed = true;
         break;
       }
       const summary = (ch.summary ?? "").trim();
       lines.push(
-        `- ${act.title} / ${ch.title}: ${summary || "(no chapter summary yet)"}`,
+        `- ${actLabel(actIndex, act.title)} / ${chapterLabel(chapterIndex, ch.title)}: ${summary || "(no chapter summary yet)"}`,
       );
     }
     if (passed) break;
@@ -217,9 +218,9 @@ export function buildStorySoFar(tree: NovelTree, currentChapterId: string): stri
 
 export function buildCurrentActOutline(
   tree: NovelTree,
-  currentActTitle: string,
+  currentActId: string,
 ): string {
-  const act = tree.acts.find((a) => a.title === currentActTitle) ?? tree.acts[0];
+  const act = tree.acts.find((a) => a.id === currentActId) ?? tree.acts[0];
   if (!act) return "(no act)";
   const slim: NovelTree = {
     novel: tree.novel,

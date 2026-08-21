@@ -15,6 +15,7 @@ import {
   upsertChapter,
   upsertKnowledge,
 } from "@/lib/novels";
+import { actLabel, chapterLabel } from "@/lib/manuscript";
 import { plainFromTipTap } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -38,11 +39,11 @@ export async function GET(
     if (tree.novel.premise) {
       lines.push("## Premise", "", tree.novel.premise, "");
     }
-    for (const act of tree.acts) {
-      lines.push(`## ${act.title}`, "");
+    for (const [actIndex, act] of tree.acts.entries()) {
+      lines.push(`## ${actLabel(actIndex, act.title)}`, "");
       if (act.brief) lines.push(act.brief, "");
-        for (const chapter of act.chapters) {
-          lines.push(`### ${chapter.title}`, "");
+        for (const [chapterIndex, chapter] of act.chapters.entries()) {
+          lines.push(`### ${chapterLabel(chapterIndex, chapter.title)}`, "");
           if (chapter.goal) lines.push(`*Goal:* ${chapter.goal}`, "");
           if (chapter.summary) lines.push(chapter.summary, "");
           if (chapter.beats.length) {

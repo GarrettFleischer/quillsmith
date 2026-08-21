@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/app-header";
 import type { DensityReport } from "@/lib/ai-tell-density";
 import { densityDisclaimer, wordCount } from "@/lib/ai-tell-density";
 import { CHECKS, type ImprovementPlan } from "@/lib/checks";
+import { actLabel, chapterLabel } from "@/lib/manuscript";
 import { plainFromTipTap } from "@/lib/utils";
 
 type Tree = {
@@ -55,10 +56,10 @@ export default function ReviewPage() {
 
   const chapters = useMemo(() => {
     if (!data) return [];
-    return data.acts.flatMap((a) =>
-      a.chapters.map((c) => ({
+    return data.acts.flatMap((a, actIndex) =>
+      a.chapters.map((c, chapterIndex) => ({
         id: c.id,
-        label: `${a.title} / ${c.title}`,
+        label: `${actLabel(actIndex, a.title)} / ${chapterLabel(chapterIndex, c.title)}`,
         prose: c.prose ?? c.scenes[0] ?? null,
       })),
     );

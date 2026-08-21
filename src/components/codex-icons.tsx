@@ -15,6 +15,25 @@ export function IconPlus({ className }: { className?: string }) {
   );
 }
 
+export function IconCaret({ className, dir = "down" }: { className?: string; dir?: "up" | "down" }) {
+  return (
+    <svg
+      className={`${className ?? ""} ${dir === "up" ? "rotate-180" : ""}`}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="m4 6 4 4 4-4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function IconChevron({ className, open }: { className?: string; open: boolean }) {
   return (
     <svg

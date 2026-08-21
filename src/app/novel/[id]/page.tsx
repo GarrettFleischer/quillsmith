@@ -10,10 +10,12 @@ import { ChapterChat } from "@/components/chapter-chat";
 import { ChapterEditor, type DraftResult } from "@/components/chapter-editor";
 import { ChapterSummaryRail } from "@/components/chapter-summary";
 import { KnowledgeSidebar, type KnowledgeEntry, type StoryFields } from "@/components/knowledge-sidebar";
+import { ManuscriptMenu } from "@/components/manuscript-menu";
 import { RailStrip } from "@/components/rail-strip";
 import { WorkspaceSheets } from "@/components/workspace-sheets";
 import { useEditorStore } from "@/store/editor";
 import { useWorkspaceStore } from "@/store/workspace";
+import { actLabel, chapterLabel } from "@/lib/manuscript";
 import type { SavedAction } from "@/lib/saved-action";
 
 type Prose = {
@@ -83,10 +85,12 @@ export default function WritePage() {
     if (!res.ok) {
       setData(null);
       setLoadError("Could not load this novel.");
-      return;
+      return null;
     }
     setLoadError("");
-    setData(await res.json());
+    const tree = (await res.json()) as Tree;
+    setData(tree);
+    return tree;
   }, [novelId]);
 
   useEffect(() => {
@@ -112,7 +116,7 @@ export default function WritePage() {
 
   useEffect(() => {
     if (!data || activeChapterId) return;
-    const firstAct = data.acts[0];
+    const firstAct = data.acts.find((act) => act.chapters[0]);
     const firstChapter = firstAct?.chapters[0];
     if (firstAct && firstChapter) {
       setActive({
@@ -125,11 +129,11 @@ export default function WritePage() {
 
   const chapterOptions = useMemo(() => {
     if (!data) return [];
-    return data.acts.flatMap((act) =>
-      act.chapters.map((ch) => ({
+    return data.acts.flatMap((act, actIndex) =>
+      act.chapters.map((ch, chapterIndex) => ({
         id: ch.id,
         actId: act.id,
-        label: `${act.title} / ${ch.title}`,
+        label: `${actLabel(actIndex, act.title)} / ${chapterLabel(chapterIndex, ch.title)}`,
         proseId: ch.prose?.id ?? ch.scenes[0]?.id ?? null,
       })),
     );
@@ -140,38 +144,129 @@ export default function WritePage() {
     if (activeChapterId) {
       for (const act of data.acts) {
         const ch = act.chapters.find((c) => c.id === activeChapterId);
-        if (ch) return { ...ch, actId: act.id, actTitle: act.title };
+        if (ch) {
+          return {
+            ...ch,
+            actId: act.id,
+            actTitle: act.title,
+            actIndex: data.acts.indexOf(act),
+            chapterIndex: act.chapters.indexOf(ch),
+          };
+        }
       }
     }
-    const act = data.acts[0];
+    const act = data.acts.find((a) => a.chapters[0]);
     const ch = act?.chapters[0];
-    return ch && act ? { ...ch, actId: act.id, actTitle: act.title } : null;
+    return ch && act
+      ? {
+          ...ch,
+          actId: act.id,
+          actTitle: act.title,
+          actIndex: data.acts.indexOf(act),
+          chapterIndex: act.chapters.indexOf(ch),
+        }
+      : null;
   }, [data, activeChapterId]);
 
   const prose = activeChapter?.prose ?? activeChapter?.scenes[0] ?? null;
 
   async function addAct() {
-    const n = (data?.acts.length ?? 0) + 1;
-    await fetch(`/api/novels/${novelId}`, {
+    const created = await fetch(`/api/novels/${novelId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "upsertAct", payload: { title: `Act ${n}` } }),
-    });
-    await refresh();
+      body: JSON.stringify({ action: "upsertAct", payload: { title: "" } }),
+    }).then((r) => r.json());
+    const tree = await refresh();
+    const act = tree?.acts.find((a) => a.id === created.id);
+    const chapter = act?.chapters[0];
+    if (act && chapter) {
+      setActive({
+        chapterId: chapter.id,
+        actId: act.id,
+        sceneId: chapter.prose?.id ?? chapter.scenes[0]?.id ?? null,
+      });
+    }
   }
 
-  async function addChapter() {
-    if (!activeChapter) return;
-    const act = data?.acts.find((a) => a.id === activeChapter.actId);
-    const n = (act?.chapters.length ?? 0) + 1;
-    await fetch(`/api/novels/${novelId}`, {
+  async function addChapter(actId: string) {
+    const created = await fetch(`/api/novels/${novelId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "upsertChapter",
-        payload: { actId: activeChapter.actId, title: `Chapter ${n}` },
+        payload: { actId, title: "" },
+      }),
+    }).then((r) => r.json());
+    const tree = await refresh();
+    const chapter = tree?.acts
+      .find((a) => a.id === actId)
+      ?.chapters.find((c) => c.id === created.id);
+    if (chapter) {
+      setActive({
+        chapterId: chapter.id,
+        actId,
+        sceneId: chapter.prose?.id ?? chapter.scenes[0]?.id ?? null,
+      });
+    }
+  }
+
+  async function moveAct(actIndex: number, dir: -1 | 1) {
+    if (!data) return;
+    const next = [...data.acts];
+    const dest = actIndex + dir;
+    if (dest < 0 || dest >= next.length) return;
+    [next[actIndex], next[dest]] = [next[dest], next[actIndex]];
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "reorderActs",
+        payload: { orderedIds: next.map((a) => a.id) },
       }),
     });
+    await refresh();
+  }
+
+  async function moveChapter(actIndex: number, chapterIndex: number, dir: -1 | 1) {
+    if (!data) return;
+    const act = data.acts[actIndex];
+    const chapter = act?.chapters[chapterIndex];
+    if (!act || !chapter) return;
+    const dest = chapterIndex + dir;
+    if (dest >= 0 && dest < act.chapters.length) {
+      const ids = act.chapters.map((c) => c.id);
+      [ids[chapterIndex], ids[dest]] = [ids[dest], ids[chapterIndex]];
+      await fetch(`/api/novels/${novelId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reorderChapters",
+          payload: { actId: act.id, orderedIds: ids },
+        }),
+      });
+    } else if (dir === -1 && actIndex > 0) {
+      const prev = data.acts[actIndex - 1];
+      await fetch(`/api/novels/${novelId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "moveChapter",
+          payload: { chapterId: chapter.id, destActId: prev.id, destIndex: prev.chapters.length },
+        }),
+      });
+    } else if (dir === 1 && actIndex < data.acts.length - 1) {
+      const nextAct = data.acts[actIndex + 1];
+      await fetch(`/api/novels/${novelId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "moveChapter",
+          payload: { chapterId: chapter.id, destActId: nextAct.id, destIndex: 0 },
+        }),
+      });
+    } else {
+      return;
+    }
     await refresh();
   }
 
@@ -225,7 +320,35 @@ export default function WritePage() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
-      <AppHeader novelId={novelId} novelTitle={data.novel.title} mode="write" />
+      <AppHeader
+        novelId={novelId}
+        novelTitle={data.novel.title}
+        mode="write"
+        tools={
+          <WriteDeskTools
+            acts={data.acts.map((act) => ({
+              id: act.id,
+              title: act.title,
+              chapters: act.chapters.map((ch) => ({
+                id: ch.id,
+                title: ch.title,
+                goal: ch.goal,
+                summary: ch.summary,
+                proseId: ch.prose?.id ?? ch.scenes[0]?.id ?? null,
+              })),
+            }))}
+            activeChapterId={activeChapter?.id ?? ""}
+            model={model}
+            hasApiKey={hasApiKey}
+            onSelectChapter={selectChapter}
+            onAddChapter={(actId) => void addChapter(actId)}
+            onAddAct={() => void addAct()}
+            onMoveAct={(index, dir) => void moveAct(index, dir)}
+            onMoveChapter={(actIndex, chapterIndex, dir) => void moveChapter(actIndex, chapterIndex, dir)}
+            onModelChange={setModel}
+          />
+        }
+      />
 
       <div className="border-b border-border p-2 lg:hidden">
         <div
@@ -286,74 +409,21 @@ export default function WritePage() {
           }`}
         >
           <div className="mx-auto max-w-3xl px-6 pb-12">
-            <div className="sticky top-0 z-10 -mx-6 border-b border-border bg-bg/95 px-6 py-4 backdrop-blur-sm">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="font-display text-3xl leading-none tracking-tight">
-                    {data.novel.title}
-                  </p>
-                  {status ? (
-                    <p className="mt-2 text-sm text-accent" role="status">
-                      {status}
-                    </p>
-                  ) : null}
-                  {!hasApiKey ? (
-                    <p className="mt-2 text-xs text-muted">
-                      Add an OpenRouter key in{" "}
-                      <Link href="/settings" className="text-accent hover:underline">
-                        Settings
-                      </Link>{" "}
-                      to use chat and Actions.
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-end gap-3">
-                  {chapterOptions.length > 0 ? (
-                    <label className="block text-xs text-muted">
-                      Chapter
-                      <select
-                        className="mt-1 block max-w-[16rem] rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                        value={activeChapter?.id ?? ""}
-                        onChange={(e) => selectChapter(e.target.value)}
-                      >
-                        {chapterOptions.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:text-text"
-                    onClick={() => void addChapter()}
-                    disabled={!activeChapter}
-                  >
-                    Add chapter
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:text-text"
-                    onClick={() => void addAct()}
-                  >
-                    Add act
-                  </button>
-                  <label className="block text-xs text-muted">
-                    Model
-                    <input
-                      className="mt-1 block w-44 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                      value={model}
-                      disabled={!hasApiKey}
-                      onChange={(e) => setModel(e.target.value)}
-                      spellCheck={false}
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-
             <div className="pt-8">
+              {status ? (
+                <p className="mb-4 text-sm text-accent" role="status">
+                  {status}
+                </p>
+              ) : null}
+              {!hasApiKey ? (
+                <p className="mb-4 text-xs text-muted">
+                  Add an OpenRouter key in{" "}
+                  <Link href="/settings" className="text-accent hover:underline">
+                    Settings
+                  </Link>{" "}
+                  to use chat and Actions.
+                </p>
+              ) : null}
               {data.acts.length === 0 ? (
                 <div className="rounded-lg border border-border bg-surface/50 p-6 panel-enter">
                   <p className="font-serif text-xl">No chapters yet</p>
@@ -372,10 +442,10 @@ export default function WritePage() {
                 <>
                   <header className="mb-6 border-b border-border pb-4">
                     <p className="text-xs uppercase tracking-wide text-muted">
-                      {activeChapter.actTitle}
+                      {actLabel(activeChapter.actIndex, activeChapter.actTitle)}
                     </p>
                     <h1 className="mt-1 font-display text-4xl leading-tight tracking-tight">
-                      {activeChapter.title}
+                      {chapterLabel(activeChapter.chapterIndex, activeChapter.title)}
                     </h1>
                     {activeChapter.goal ? (
                       <p className="mt-3 max-w-prose text-sm italic text-muted">
@@ -423,7 +493,11 @@ export default function WritePage() {
               key={activeChapter?.id ?? "beats"}
               novelId={novelId}
               chapterId={activeChapter?.id ?? null}
-              chapterTitle={activeChapter?.title}
+              chapterTitle={
+                activeChapter
+                  ? chapterLabel(activeChapter.chapterIndex, activeChapter.title)
+                  : undefined
+              }
               beats={activeChapter?.beats ?? []}
               onChange={() => void refresh()}
               onCollapse={() => {
@@ -448,7 +522,11 @@ export default function WritePage() {
               key={`sum-${activeChapter?.id ?? "none"}`}
               novelId={novelId}
               chapterId={activeChapter?.id ?? null}
-              chapterTitle={activeChapter?.title}
+              chapterTitle={
+                activeChapter
+                  ? chapterLabel(activeChapter.chapterIndex, activeChapter.title)
+                  : undefined
+              }
               chapterSummary={activeChapter?.summary ?? ""}
               onChange={() => void refresh()}
               onCollapse={() => setSummaryOpen(false)}
@@ -496,5 +574,64 @@ export default function WritePage() {
         onJumpToProse={jumpToProse}
       />
     </div>
+  );
+}
+
+function WriteDeskTools({
+  acts,
+  activeChapterId,
+  model,
+  hasApiKey,
+  onSelectChapter,
+  onAddChapter,
+  onAddAct,
+  onMoveAct,
+  onMoveChapter,
+  onModelChange,
+}: {
+  acts: Array<{
+    id: string;
+    title: string;
+    chapters: Array<{
+      id: string;
+      title: string;
+      goal: string | null;
+      summary: string | null;
+      proseId: string | null;
+    }>;
+  }>;
+  activeChapterId: string;
+  model: string;
+  hasApiKey: boolean;
+  onSelectChapter: (chapterId: string) => void;
+  onAddChapter: (actId: string) => void;
+  onAddAct: () => void;
+  onMoveAct: (actIndex: number, dir: -1 | 1) => void;
+  onMoveChapter: (actIndex: number, chapterIndex: number, dir: -1 | 1) => void;
+  onModelChange: (model: string) => void;
+}) {
+  return (
+    <>
+      <ManuscriptMenu
+        acts={acts}
+        activeChapterId={activeChapterId}
+        onSelectChapter={onSelectChapter}
+        onAddAct={onAddAct}
+        onAddChapter={onAddChapter}
+        onMoveAct={onMoveAct}
+        onMoveChapter={onMoveChapter}
+      />
+      <label className="hidden min-w-0 lg:block">
+        <span className="sr-only">Model</span>
+        <input
+          className="w-40 rounded border border-border bg-surface px-2 py-1 text-sm text-text hover:text-text disabled:opacity-50 disabled:hover:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          value={model}
+          disabled={!hasApiKey}
+          onChange={(e) => onModelChange(e.target.value)}
+          spellCheck={false}
+          aria-label="Model"
+        />
+      </label>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { acts, chapters, scenes } from "@/db/schema";
 import { systemPromptForTask } from "@/lib/ai-tasks";
+import { actLabel, chapterLabel, findChapterPlace } from "@/lib/manuscript";
 import { getNovelTree, upsertAct, upsertChapter } from "@/lib/novels";
 import { collectAgentText, runAgentLoop, type ChatMessage } from "@/lib/openrouter";
 import { resolveTaskRuntime } from "@/lib/task-runtime";
@@ -28,11 +29,12 @@ export async function POST(req: Request) {
       }
       const { model, temperature } = resolveTaskRuntime("summarize_act", body.model);
       const chapterRows = db.select().from(chapters).where(eq(chapters.actId, act.id)).all();
+      const actIndex = tree.acts.findIndex((a) => a.id === act.id);
       const messages: ChatMessage[] = [
         { role: "system", content: systemPromptForTask("summarize_act") },
         {
           role: "user",
-          content: `Act: ${act.title}
+          content: `Act: ${actLabel(Math.max(actIndex, 0), act.title)}
 Brief: ${act.brief}
 Introduces: ${act.introduces}
 Accomplishes: ${act.accomplishes}
@@ -41,7 +43,7 @@ State start: ${act.stateStart}
 State end: ${act.stateEnd}
 
 Chapter summaries:
-${chapterRows.map((c) => `- ${c.title}: ${c.summary || "(none)"}`).join("\n")}`,
+${chapterRows.map((c, i) => `- ${chapterLabel(i, c.title)}: ${c.summary || "(none)"}`).join("\n")}`,
         },
       ];
       const proposed = await collectAgentText(
@@ -70,7 +72,7 @@ ${chapterRows.map((c) => `- ${c.title}: ${c.summary || "(none)"}`).join("\n")}`,
       { role: "system", content: systemPromptForTask("summarize_chapter") },
       {
         role: "user",
-        content: `Chapter: ${chapter.title}
+        content: `Chapter: ${chapterLabel(findChapterPlace(tree.acts, chapter.id)?.chapterIndex ?? 0, chapter.title)}
 Goal: ${chapter.goal}
 Current summary: ${chapter.summary || "(none)"}
 

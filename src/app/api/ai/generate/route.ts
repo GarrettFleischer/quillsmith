@@ -23,6 +23,7 @@ import {
   updateSceneSliders,
 } from "@/lib/novels";
 import { knowledgeForSceneText } from "@/lib/mentions";
+import { actLabel, chapterLabel, findChapterPlace } from "@/lib/manuscript";
 import { compileTemplate } from "@/lib/prompt";
 import {
   buildCodex,
@@ -159,6 +160,9 @@ export async function POST(req: Request) {
       a.chapters.map((c) => ({ act: a, chapter: c })),
     );
     const idx = ordered.findIndex((row) => row.chapter.id === chapter.id);
+    const place = findChapterPlace(tree.acts, chapter.id);
+    const actTitle = place ? actLabel(place.actIndex, place.act.title) : act.title;
+    const chapterTitle = place ? chapterLabel(place.chapterIndex, place.chapter.title) : chapter.title;
     const prevChapter = idx > 0 ? ordered[idx - 1]?.chapter : undefined;
     const nextChapter = idx >= 0 ? ordered[idx + 1]?.chapter : undefined;
     const prevProse = prevChapter?.prose ?? prevChapter?.scenes[0];
@@ -237,14 +241,14 @@ export async function POST(req: Request) {
         chapterBeats,
         userInstruction: body.instruction,
         answers,
-        sceneTitle: chapter.title,
+        sceneTitle: chapterTitle,
         hasExistingProse: Boolean(currentPlain.trim()),
       }),
       codex: buildCodex(kb),
       mentionedCodex: buildCodex(mentionKb),
       outline: buildOutlineXml(tree),
       storySoFar: buildStorySoFar(tree, chapter.id),
-      currentActOutline: buildCurrentActOutline(tree, act.title),
+      currentActOutline: buildCurrentActOutline(tree, act.id),
       novelMeta: buildNovelMeta(tree, answers),
       currentScene: currentPlain,
       currentChapter: currentPlain,
@@ -254,15 +258,18 @@ export async function POST(req: Request) {
       nextScene: nextPlain || "(none - do not invent a following chapter)",
       nextChapter: nextPlain
         ? nextPlain ||
-          `(next chapter${nextChapter?.title ? `: ${nextChapter.title}` : ""} - do not write this yet)`
+          `(next chapter${nextChapter ? `: ${chapterLabel(
+            (findChapterPlace(tree.acts, nextChapter.id)?.chapterIndex ?? 0),
+            nextChapter.title,
+          )}` : ""} - do not write this yet)`
         : "(none - do not invent a following chapter)",
       chapterText: currentPlain,
       chapterBeats: chapterBeats.map((b, i) => `${i + 1}. ${b.content}`).join("\n"),
       chapterSummary: chapter.summary ?? "",
       chapterGoal: chapter.goal ?? "",
-      chapterTitle: chapter.title,
+      chapterTitle,
       selection: body.selection?.trim() || "",
-      actTitle: act.title,
+      actTitle,
       actBrief: [
         act.brief,
         act.introduces && `Introduces: ${act.introduces}`,
@@ -276,8 +283,8 @@ export async function POST(req: Request) {
     });
 
     const scenePack = sceneMatchText([
-      `Act: ${act.title}`,
-      `Chapter: ${chapter.title}`,
+      `Act: ${actTitle}`,
+      `Chapter: ${chapterTitle}`,
       chapter.goal,
       ...chapterBeats.map((b) => b.content),
       body.instruction,

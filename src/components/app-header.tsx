@@ -2,17 +2,19 @@
 
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { IconGear } from "@/components/codex-icons";
 
 export function AppHeader({
   novelTitle,
   novelId,
   mode,
+  tools,
 }: {
   novelTitle?: string;
   novelId?: string;
   mode?: "write" | "review";
+  tools?: ReactNode;
 }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -20,16 +22,16 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg/90 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-4 px-4">
-        <Link href="/" className="font-display text-2xl tracking-tight text-text">
+      <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-4">
+        <Link href="/" className="shrink-0 font-display text-2xl tracking-tight text-text">
           Quillsmith
         </Link>
         {novelTitle ? (
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="hidden text-muted sm:inline">/</span>
             <span className="hidden truncate font-serif text-lg sm:inline">{novelTitle}</span>
             {novelId && mode ? (
-              <nav className="flex rounded-md border border-border bg-surface p-0.5 text-sm">
+              <nav className="flex shrink-0 rounded-md border border-border bg-surface p-0.5 text-sm">
                 <Link
                   href={`/novel/${novelId}`}
                   className={`rounded px-3 py-1 transition ${
@@ -49,10 +51,15 @@ export function AppHeader({
               </nav>
             ) : null}
           </div>
+        ) : null}
+        {tools ? (
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+            {tools}
+          </div>
         ) : (
           <div className="flex-1" />
         )}
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex shrink-0 items-center gap-2 text-sm">
           {novelId ? (
             <>
               <a

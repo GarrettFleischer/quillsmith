@@ -13,7 +13,10 @@ import {
   listOverviewAnswers,
   listOverviewMessages,
   listSceneRevisions,
+  moveChapter,
+  reorderActs,
   reorderBeats,
+  reorderChapters,
   replaceChapterBeats,
   restoreSceneRevision,
   saveSceneContent,
@@ -159,6 +162,25 @@ export async function PATCH(
       }
       return Response.json(listChapterChat(id, chapterId));
     }
+    case "reorderActs":
+      return Response.json(reorderActs(id, body.payload.orderedIds as string[]));
+    case "reorderChapters":
+      return Response.json(
+        reorderChapters(
+          String(body.payload.actId),
+          body.payload.orderedIds as string[],
+          id,
+        ),
+      );
+    case "moveChapter":
+      return Response.json(
+        moveChapter(
+          String(body.payload.chapterId),
+          String(body.payload.destActId),
+          Number(body.payload.destIndex),
+          id,
+        ),
+      );
     case "reorderBeats":
       return Response.json(
         reorderBeats(

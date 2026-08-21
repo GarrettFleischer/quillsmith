@@ -35,7 +35,7 @@ Highlight a passage, Send to chat, attach Expand, review hunks in the chapter ‚Ä
 
 - Preserve Ink Ledger. Codex and Action edit sheets are the only floating panes; they are ledger sheets (border, opaque surface), not dashboard cards.
 - Mobile: Manuscript / Codex / Chat / Plan (summary + beats stacked); sheets go full inset.
-- Header is Write | Review, plus Settings (gear) for API key and models
+- Header is Write | Review, plus a manuscript tree menu (acts/chapters, add, reorder), model, then export and Settings (gear)
 - No ‚Äúscene‚Äù language in UI copy
 - Do not invent Snippets, Series, or Book-scope filters that the product does not have
 
@@ -44,6 +44,6 @@ Highlight a passage, Send to chat, attach Expand, review hunks in the chapter ‚Ä
 - Left rail tabs: Codex | Actions (horizontal). Codex grouped by type with search, New Entry, and per-group add. Actions list with search and New Action.
 - Click/add opens a draggable pinnable editor. Unpinned inspector is reused per family (Codex vs Actions); pin to keep several open
 - Settings lives in the header and at `/settings`, not in the left rail
-- Center: act/chapter switcher, add act/chapter, one TipTap chapter body
+- Center: one TipTap chapter body. Header manuscript menu lists acts as groups and chapters as rows; add and reorder live in that window.
 - Right inner ‚Üí outer: Beats 240 / Summary 260 / Chat 320
 - Chapter chat API: summary, beats, Codex search, propose rewrite as hunks

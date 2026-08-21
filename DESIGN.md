@@ -167,13 +167,13 @@ The palette reads as ink on paper: warm neutrals carry most of the UI; teal ink 
 
 **Write mode shell:** full-height flex column — sticky header, then Codex/Actions `280px` | manuscript `flex-1 min-w-0` | Beats `240px` | Summary `260px` | Chat `320px`. Each right rail collapses independently to a 40px strip. Side rails use `bg-surface/70` with `border-r` / `border-l`. Default on typical widths: Codex + Chat open; Beats and Summary collapsed.
 
-**Manuscript column:** one chapter at a time, `max-w-3xl` centered with `px-6`. Sticky chapter switcher in the manuscript header. Quiet prose column; highlight BubbleMenu for Send to chat — not card soup.
+**Manuscript column:** one chapter at a time, `max-w-3xl` centered with `px-6`. Quiet prose column; highlight BubbleMenu for Send to chat — not card soup.
 
 **Review mode:** single column `max-w-3xl`, stats and suggestion lists. Sibling of Write, not a Write drawer.
 
 **Home & App settings:** single column, `max-w-3xl` or `max-w-5xl`, `px-4 py-12`. Novel list uses divided rows, not card grid.
 
-**Header:** `h-14`, `max-w-[1600px]`, sticky with `border-b`, `bg-bg/90 backdrop-blur-md`. Mode toggle is Write | Review.
+**Header:** `h-14`, `max-w-[1600px]`, sticky with `border-b`, `bg-bg/90 backdrop-blur-md`. Mode toggle is Write | Review. Write desk tools (manuscript tree menu, model) sit between the toggle and export. The manuscript menu is a compact ledger popover: acts as collapsible groups, chapters as rows, add act/chapter and reorder in the window.
 
 **Spacing rhythm:** 4px base; common gaps `gap-2` (8px), `gap-3` (12px), `gap-4` (16px); section breaks `mt-8`–`mt-12`.
 

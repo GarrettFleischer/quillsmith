@@ -12,6 +12,7 @@ import {
   listChapterChat,
   listKnowledge,
 } from "@/lib/novels";
+import { actLabel, chapterLabel, findChapterPlace } from "@/lib/manuscript";
 import { compileTemplate } from "@/lib/prompt";
 import { buildCodex } from "@/lib/prompts/context";
 import { agentSseResponse, runAgentLoop, type ChatMessage } from "@/lib/openrouter";
@@ -80,6 +81,9 @@ export async function POST(req: Request) {
     const chapterPlain = prose ? plainFromTipTap(prose.content) : "";
     const mentionPack = [chapterPlain, body.selection, body.message].filter(Boolean).join("\n");
     const mentioned = knowledgeForSceneText(body.novelId, mentionPack);
+    const place = findChapterPlace(tree.acts, chapter.id);
+    const actTitle = place ? actLabel(place.actIndex, place.act.title) : act.title;
+    const chapterTitle = place ? chapterLabel(place.chapterIndex, place.chapter.title) : chapter.title;
     const command = body.actionSlug ? getCommand(body.actionSlug) : null;
     const compiledAction = command
       ? compileTemplate(command.promptTemplate, {
@@ -87,21 +91,21 @@ export async function POST(req: Request) {
           selection: body.selection ?? "",
           currentChapter: chapterPlain,
           currentScene: chapterPlain,
-          chapterTitle: chapter.title,
+          chapterTitle,
           chapterGoal: chapter.goal ?? "",
           chapterSummary: chapter.summary ?? "",
           chapterBeats: chapterBeats.map((b, i) => `${i + 1}. ${b.content}`).join("\n"),
           mentionedCodex: buildCodex(mentioned),
           codex: buildCodex(listKnowledge(body.novelId)),
           knowledge: mentioned.map((e) => `- ${e.name} (${e.type}): ${e.summary}`).join("\n"),
-          actTitle: act.title,
+          actTitle,
           novelPremise: tree.novel.premise ?? "",
         })
       : "";
 
     const system = `${systemPromptForTask("chapter_chat")}
 
-Current chapter: ${act.title} / ${chapter.title}
+Current chapter: ${actTitle} / ${chapterTitle}
 Goal: ${chapter.goal || "(none)"}
 Summary:
 ${chapter.summary || "(empty)"}

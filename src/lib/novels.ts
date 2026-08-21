@@ -43,7 +43,7 @@ export function createNovel(title: string) {
       updatedAt: ts,
     })
     .run();
-  upsertAct({ novelId, title: "Act 1" });
+  upsertAct({ novelId, title: "" });
   return getNovel(novelId)!;
 }
 
@@ -193,7 +193,7 @@ export function upsertAct(input: {
   upsertChapter({
     actId,
     novelId: input.novelId,
-    title: "Chapter 1",
+    title: "",
   });
   return db.select().from(acts).where(eq(acts.id, actId)).get()!;
 }
@@ -616,6 +616,77 @@ export function deleteBeat(beatId: string, novelId: string) {
   assertBeatInNovel(beatId, novelId);
   getDb().delete(beats).where(eq(beats.id, beatId)).run();
   touchNovel(novelId);
+}
+
+export function reorderActs(novelId: string, orderedIds: string[]) {
+  const db = getDb();
+  for (const actId of orderedIds) {
+    assertActInNovel(actId, novelId);
+  }
+  orderedIds.forEach((actId, index) => {
+    db.update(acts).set({ order: index }).where(eq(acts.id, actId)).run();
+  });
+  touchNovel(novelId);
+  return db.select().from(acts).where(eq(acts.novelId, novelId)).orderBy(asc(acts.order)).all();
+}
+
+export function reorderChapters(actId: string, orderedIds: string[], novelId: string) {
+  assertActInNovel(actId, novelId);
+  const db = getDb();
+  for (const chapterId of orderedIds) {
+    const chapter = assertChapterInNovel(chapterId, novelId);
+    if (chapter.actId !== actId) throw new Error("Chapter not in act");
+  }
+  orderedIds.forEach((chapterId, index) => {
+    db.update(chapters).set({ order: index }).where(eq(chapters.id, chapterId)).run();
+  });
+  touchNovel(novelId);
+  return db
+    .select()
+    .from(chapters)
+    .where(eq(chapters.actId, actId))
+    .orderBy(asc(chapters.order))
+    .all();
+}
+
+export function moveChapter(
+  chapterId: string,
+  destActId: string,
+  destIndex: number,
+  novelId: string,
+) {
+  const chapter = assertChapterInNovel(chapterId, novelId);
+  assertActInNovel(destActId, novelId);
+  const db = getDb();
+  const sourceActId = chapter.actId;
+  const destRows = db
+    .select()
+    .from(chapters)
+    .where(eq(chapters.actId, destActId))
+    .orderBy(asc(chapters.order))
+    .all()
+    .filter((row) => row.id !== chapterId);
+  const clamped = Math.max(0, Math.min(destIndex, destRows.length));
+  destRows.splice(clamped, 0, chapter);
+  destRows.forEach((row, index) => {
+    db.update(chapters)
+      .set({ actId: destActId, order: index })
+      .where(eq(chapters.id, row.id))
+      .run();
+  });
+  if (sourceActId !== destActId) {
+    const sourceRows = db
+      .select()
+      .from(chapters)
+      .where(eq(chapters.actId, sourceActId))
+      .orderBy(asc(chapters.order))
+      .all();
+    sourceRows.forEach((row, index) => {
+      db.update(chapters).set({ order: index }).where(eq(chapters.id, row.id)).run();
+    });
+  }
+  touchNovel(novelId);
+  return db.select().from(chapters).where(eq(chapters.id, chapterId)).get()!;
 }
 
 export function reorderBeats(chapterId: string, orderedIds: string[], novelId: string) {
