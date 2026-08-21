@@ -26,14 +26,14 @@ Three mechanisms together, not one gimmick:
 ## Operating Context
 
 - **Home** (`/`) — Create and open novels. A new novel starts with Act 1 / Chapter 1 on the Write desk.
-- **Write** (`/novel/[id]`) — Chapter-first desk: Codex | Settings (Actions) on the left; one chapter editor in the center; collapsible Beats, Summary, and chapter Chat on the right. Highlight **Send to chat**; Action chips attach saved prompts.
+- **Write** (`/novel/[id]`) — Chapter-first desk: Codex | Actions on the left; one chapter editor in the center; collapsible Beats, Summary, and chapter Chat on the right. Highlight **Send to chat**; Action chips attach saved prompts.
 - **Review** (`/novel/[id]/review`) — Autocrit-shaped sibling tab: chapter or book stats (pattern density) and generated check suggestions. Not a panel inside Write.
-- **App** (`/settings`) — OpenRouter API key, default model, per-task model routing, model compare, density thresholds, drafting pipeline. Saved Actions are edited in Write → Settings, not here.
+- **Settings** (`/settings`) — OpenRouter API key, default model, per-task model routing, model compare, density thresholds, drafting pipeline. Saved Actions are edited in Write → Actions, not here.
 - **Design lab** (`/design/lab`) — Internal aesthetic exploration surface for the Ink Ledger direction.
 
 `/novel/[id]/overview` redirects to Write. The Overview wizard is retired.
 
-Data persists in `data/quillsmith.db` (gitignored). Dev server: `npm run dev` at `http://localhost:3000`.
+Data persists in `data/quillsmith.db` (gitignored). Dev server: `bun run dev` at `http://localhost:3000`.
 
 ## Capabilities and Constraints
 
@@ -49,7 +49,7 @@ Data persists in `data/quillsmith.db` (gitignored). Dev server: `npm run dev` at
 - Chapter summaries and beats as structured AI context (story-so-far instead of dumping the manuscript).
 - Per-novel living style guide (author-approved rules injected into drafting).
 - Review: pattern-density counts and check suggestions against the current chapter or whole book. Not an “AI score.”
-- Optional multi-model layering is the Expand path (brief → dialogue → connective prose → climax polish), then plan-then-apply checks on the new prose. Turn the pipeline off in App settings for a single-shot expand.
+- Optional multi-model layering is the Expand path (brief → dialogue → connective prose → climax polish), then plan-then-apply checks on the new prose. Turn the pipeline off in Settings for a single-shot expand.
 - Comparison-book analysis as genre grammar — not a plot to copy.
 - Light/dark theme via `next-themes`.
 
@@ -66,12 +66,12 @@ Data persists in `data/quillsmith.db` (gitignored). Dev server: `npm run dev` at
 - *Write* — Chapter drafting desk. The only in-flow workspace.
 - *Review* — Separate Autocrit-style mode for density stats and check suggestions.
 - *Codex* — Per-novel story bible (characters, lore, locations, items, other) plus a Story item for premise and style.
-- *Actions* — Saved prompt templates (formerly slash commands) edited in Write → Settings and attached as chat chips.
-- *App* — Global settings route for API key, models, and pipeline. Header label is App so it does not collide with the Write Settings rail.
+- *Actions* — Saved prompt templates (formerly slash commands) edited in Write → Actions as draggable sheets and attached as chat chips.
+- *Settings* — Global settings route for API key, models, and pipeline. Header control is Settings.
 - *Checks* — Narrow improvement plans (adverbs, tags, logic, contrast crutches). Expand can apply them to new prose automatically.
 - *Narrative physics* — Numbered chapter/character sliders injected into drafting. Expand proposes them when a chapter has none.
 - *Layering* — Multi-model chapter pipeline used by Expand, not only an Action slug.
-- *Drafting pipeline* — App-settings toggle. On: Expand curates context, sets sliders, layers models, then checks. Off: single-shot expand.
+- *Drafting pipeline* — Settings toggle. On: Expand curates context, sets sliders, layers models, then checks. Off: single-shot expand.
 - *Style guide* — Author-edited voice rules, approved before they affect Expand.
 - *Chapter summaries* — Short rollups (what happens, who is in the chapter, promises) used as distant context.
 - *AI tell scrubbers* — Single-pattern cleanup detectors (metaphor stacking, brochure language, etc.).

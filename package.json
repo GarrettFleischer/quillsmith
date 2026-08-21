@@ -5,8 +5,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit --pretty false",
     "lint": "eslint",
-    "db:seed": "tsx -e \"import { getDb } from './src/db/index.ts'; getDb();\""
+    "db:seed": "bun -e \"import { getDb } from './src/db/index.ts'; getDb();\""
   },
   "dependencies": {
     "@tiptap/extension-bubble-menu": "^3.29.1",

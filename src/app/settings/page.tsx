@@ -70,8 +70,10 @@ export default function SettingsPage() {
     <div className="min-h-full">
       <AppHeader />
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <h1 className="font-display text-4xl">App</h1>
-        <p className="mt-2 text-muted">OpenRouter, models, and drafting pipeline. Chapter Actions live in Write → Settings.</p>
+        <h1 className="font-display text-4xl">Settings</h1>
+        <p className="mt-2 text-muted">
+          OpenRouter, models, and drafting pipeline. Chapter Actions live in Write → Actions.
+        </p>
 
         <section className="mt-8 space-y-3 rounded border border-border bg-surface p-4">
           <h2 className="font-serif text-xl">OpenRouter</h2>

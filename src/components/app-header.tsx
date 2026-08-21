@@ -3,6 +3,7 @@
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { IconGear } from "@/components/codex-icons";
 
 export function AppHeader({
   novelTitle,
@@ -70,9 +71,10 @@ export function AppHeader({
           ) : null}
           <Link
             href="/settings"
-            className="rounded border border-border px-2 py-1 text-muted hover:text-text"
+            className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-muted hover:text-text"
           >
-            App
+            <IconGear className="h-3.5 w-3.5" />
+            Settings
           </Link>
           <button
             type="button"

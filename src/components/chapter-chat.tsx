@@ -46,7 +46,8 @@ export function ChapterChat({
   const setStatus = useEditorStore((s) => s.setStatus);
   const selection = useWorkspaceStore((s) => s.selection);
   const actionSlug = useWorkspaceStore((s) => s.actionSlug);
-  const openActionInSettings = useWorkspaceStore((s) => s.openActionInSettings);
+  const setActionSlug = useWorkspaceStore((s) => s.setActionSlug);
+  const editAction = useWorkspaceStore((s) => s.editAction);
   const clearSelection = useWorkspaceStore((s) => s.clearSelection);
   const clearAction = useWorkspaceStore((s) => s.clearAction);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -255,7 +256,7 @@ export function ChapterChat({
               }`}
               onClick={() => {
                 if (actionSlug === c.slug) clearAction();
-                else openActionInSettings(c.slug);
+                else setActionSlug(c.slug);
               }}
             >
               {c.label}
@@ -277,7 +278,7 @@ export function ChapterChat({
             <button
               type="button"
               className="rounded-md border border-accent bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent"
-              onClick={() => openActionInSettings(action.slug)}
+              onClick={() => editAction(action.slug)}
             >
               {action.label}
             </button>
@@ -286,7 +287,7 @@ export function ChapterChat({
         <textarea
           className="w-full rounded-md border border-border bg-bg px-2 py-2 text-sm"
           rows={3}
-          placeholder={hasApiKey ? "Ask or add a note…" : "Add an OpenRouter key in App to chat."}
+          placeholder={hasApiKey ? "Ask or add a note…" : "Add an OpenRouter key in Settings to chat."}
           value={draft}
           disabled={!hasApiKey || busy}
           onChange={(e) => setDraft(e.target.value)}

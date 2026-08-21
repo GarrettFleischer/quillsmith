@@ -13,19 +13,19 @@ Quillsmith is a local-first novel writing workspace. Authors structure a manuscr
 - **Slash commands** — `/expand`, `/rewrite`, `/density`, `/scrub-*`, `/check-*` (plan then apply-only), `/layer` (multi-model pipeline).
 - **Knowledge base** — Typed lore entries (characters, places, etc.) with appearance tracking across scenes; `@` mentions pull relevant context into drafts.
 - **Lore-aware AI** — OpenRouter tool-calling loops let the model search knowledge, read outline context, and stay aligned with prior scenes.
-- **Customizable commands** — Edit slash-command prompts, temperatures, and per-model overrides in Settings.
+- **Customizable commands** — Edit Action prompts and temperatures in Write → Actions.
 - **Export / import** — JSON and Markdown export for backup and migration.
 - **Local-first** — SQLite at `data/quillsmith.db` (gitignored). Bring your own OpenRouter API key.
 
 ## Quick start
 
-**Requirements:** Node.js 20+, npm
+**Requirements:** [Bun](https://bun.sh/) 1.1+ (recommended) or Node.js 20+
 
 ```bash
 git clone https://github.com/GarrettFleischer/quillsmith.git
 cd quillsmith
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000), create a novel, and add your [OpenRouter](https://openrouter.ai/) API key under **Settings**.
@@ -33,7 +33,7 @@ Open [http://localhost:3000](http://localhost:3000), create a novel, and add you
 Optional: seed the database on first run (happens automatically when the app starts):
 
 ```bash
-npm run db:seed
+bun run db:seed
 ```
 
 ## Project structure
@@ -65,11 +65,12 @@ Quillsmith uses the **Ink Ledger** direction: calm manuscript workspace, editori
 ## Scripts
 
 ```bash
-npm run dev      # development server
-npm run build    # production build
-npm run start    # run production server
-npm run lint     # ESLint
-npm run db:seed  # initialize SQLite database
+bun run dev      # development server
+bun run typecheck # tsc --noEmit
+bun run build    # production build
+bun run start    # run production server
+bun run lint     # ESLint
+bun run db:seed  # initialize SQLite database
 ```
 
 ## Privacy & AI

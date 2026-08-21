@@ -1,221 +1,107 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { PROSE_TEMPLATE_PLACEHOLDERS } from "@/lib/prompts/templates";
+import { useMemo, useState } from "react";
+import { IconPlus, IconSearch, IconSpark } from "@/components/codex-icons";
+import { LeftRailTabs } from "@/components/left-rail-tabs";
+import { entrySnippet } from "@/lib/codex-ui";
+import type { SavedAction } from "@/lib/saved-action";
 import { useWorkspaceStore } from "@/store/workspace";
 
-type Command = {
-  id: string;
-  slug: string;
-  label: string;
-  description: string | null;
-  defaultTemperature: number;
-  promptTemplate: string;
-  enableTools: string;
-  builtIn: boolean;
-};
-
 export function ActionsSidebar({
+  actions,
   onCollapse,
-  onChange,
   className,
 }: {
+  actions: SavedAction[];
   onCollapse?: () => void;
-  onChange?: () => void;
   className?: string;
 }) {
-  const focusedActionSlug = useWorkspaceStore((s) => s.focusedActionSlug);
-  const [commands, setCommands] = useState<Command[]>([]);
-  const [editing, setEditing] = useState<Command | null>(null);
-  const [status, setStatus] = useState("");
+  const [filter, setFilter] = useState("");
+  const openActionWindow = useWorkspaceStore((s) => s.openActionWindow);
+  const windows = useWorkspaceStore((s) => s.windows);
+  const focusedId = useWorkspaceStore((s) => s.focusedWindowId);
+  const activeTarget = windows.find((w) => w.id === focusedId)?.target ?? null;
+  const q = filter.trim().toLowerCase();
 
-  async function refresh() {
-    const res = await fetch("/api/settings");
-    const data = await res.json();
-    const list = (data.commands ?? []) as Command[];
-    setCommands(list);
-    if (focusedActionSlug) {
-      const match = list.find((c) => c.slug === focusedActionSlug);
-      if (match) setEditing(match);
-    }
-  }
+  const filtered = useMemo(
+    () =>
+      actions.filter(
+        (a) =>
+          !q ||
+          a.label.toLowerCase().includes(q) ||
+          a.slug.toLowerCase().includes(q) ||
+          (a.description ?? "").toLowerCase().includes(q),
+      ),
+    [actions, q],
+  );
 
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!focusedActionSlug) return;
-    const match = commands.find((c) => c.slug === focusedActionSlug);
-    if (match) setEditing(match);
-  }, [focusedActionSlug, commands]);
-
-  async function saveCommand() {
-    if (!editing) return;
-    await fetch("/api/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "upsertCommand", payload: editing }),
-    });
-    setStatus("Saved");
-    await refresh();
-    onChange?.();
-  }
-
-  function insertVar(name: string) {
-    if (!editing) return;
-    setEditing({
-      ...editing,
-      promptTemplate: `${editing.promptTemplate}{{${name}}}`,
-    });
+  function isActive(slug: string) {
+    return activeTarget?.kind === "action" && activeTarget.slug === slug;
   }
 
   return (
     <aside
-      className={`flex h-full min-h-0 w-[280px] shrink-0 flex-col border-r border-border bg-surface/70 panel-enter ${className ?? ""}`}
+      className={`flex h-full min-h-0 w-[300px] shrink-0 flex-col border-r border-border bg-surface/70 panel-enter ${className ?? ""}`}
     >
-      <div className="border-b border-border px-3 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-serif text-lg">Settings</h2>
-          {onCollapse ? (
-            <button
-              type="button"
-              className="text-xs text-muted hover:text-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              onClick={onCollapse}
-            >
-              Hide
-            </button>
-          ) : null}
-        </div>
-        <p className="mt-1 text-xs text-muted">
-          Saved Actions with injectable variables. API key lives under App.
-        </p>
-      </div>
-      <ul className="min-h-0 flex-1 space-y-1 overflow-auto p-2">
-        {commands.map((c) => (
-          <li key={c.id}>
-            <button
-              type="button"
-              className={`w-full rounded px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
-                editing?.id === c.id ? "bg-accent-soft text-accent" : "hover:bg-surface-2"
-              }`}
-              onClick={() => setEditing(c)}
-            >
-              <span className="block font-medium">{c.label}</span>
-              <span className="text-xs text-muted">{c.slug}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="border-t border-border p-2">
-        <button
-          type="button"
-          className="text-xs text-accent hover:underline"
-          onClick={() =>
-            setEditing({
-              id: "",
-              slug: "custom",
-              label: "Custom",
-              description: "",
-              defaultTemperature: 0.7,
-              promptTemplate:
-                "Instruction: {{userInstruction}}\n\nSelection:\n{{selection}}\n\nChapter:\n{{currentChapter}}\n\nMentioned Codex:\n{{mentionedCodex}}",
-              enableTools: "true",
-              builtIn: false,
-            })
-          }
-        >
-          New action
-        </button>
-      </div>
-      {editing ? (
-        <div className="max-h-[50%] overflow-auto border-t border-border p-3 text-sm">
-          <input
-            className="mb-2 w-full rounded border border-border bg-bg px-2 py-1"
-            value={editing.label}
-            onChange={(e) => setEditing({ ...editing, label: e.target.value })}
-            placeholder="Label"
-          />
-          <input
-            className="mb-2 w-full rounded border border-border bg-bg px-2 py-1 font-mono text-xs"
-            value={editing.slug}
-            onChange={(e) => setEditing({ ...editing, slug: e.target.value })}
-            placeholder="slug"
-          />
-          <p className="mb-1 text-xs text-muted">Variables</p>
-          <div className="mb-2 flex flex-wrap gap-1">
-            {["mentionedCodex", "selection", "chapterSummary", "chapterBeats", "currentChapter", "userInstruction", "codex"].map(
-              (name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted hover:text-text"
-                  onClick={() => insertVar(name)}
-                >
-                  {`{{${name}}}`}
-                </button>
-              ),
-            )}
-            {PROSE_TEMPLATE_PLACEHOLDERS.filter(
-              (n) =>
-                ![
-                  "mentionedCodex",
-                  "selection",
-                  "chapterSummary",
-                  "chapterBeats",
-                  "currentChapter",
-                  "userInstruction",
-                  "codex",
-                ].includes(n),
-            )
-              .slice(0, 8)
-              .map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted hover:text-text"
-                  onClick={() => insertVar(name)}
-                >
-                  {`{{${name}}}`}
-                </button>
-              ))}
-          </div>
-          <textarea
-            className="mb-2 w-full rounded border border-border bg-bg px-2 py-1 font-mono text-xs"
-            rows={10}
-            value={editing.promptTemplate}
-            onChange={(e) => setEditing({ ...editing, promptTemplate: e.target.value })}
-          />
-          <label className="mb-2 flex items-center gap-2 text-xs">
+      <LeftRailTabs onCollapse={onCollapse} />
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          <div className="relative min-w-0 flex-1">
+            <IconSearch className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
             <input
-              type="checkbox"
-              checked={editing.enableTools === "true"}
-              onChange={(e) =>
-                setEditing({ ...editing, enableTools: e.target.checked ? "true" : "false" })
-              }
+              className="w-full rounded-md border border-border bg-bg py-1.5 pr-2 pl-7 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              placeholder="Search actions…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
             />
-            Enable Codex tools
-          </label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="rounded bg-accent px-2 py-1 text-xs text-bg"
-              onClick={() => void saveCommand()}
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              className="rounded border border-border px-2 py-1 text-xs"
-              onClick={() => setEditing(null)}
-            >
-              Close
-            </button>
           </div>
-          {status ? <p className="mt-2 text-xs text-accent">{status}</p> : null}
+          <button
+            type="button"
+            className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-bg px-2 py-1.5 text-xs hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            onClick={() => openActionWindow({ kind: "new-action" })}
+          >
+            <IconPlus className="h-3.5 w-3.5" />
+            New Action
+          </button>
         </div>
-      ) : null}
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+        {filtered.length === 0 ? (
+          <p className="px-2 py-2 text-sm text-muted">
+            {q ? "No matching actions." : "No actions yet."}
+          </p>
+        ) : (
+          filtered.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => openActionWindow({ kind: "action", slug: a.slug })}
+              className={`mb-0.5 flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
+                isActive(a.slug) ? "bg-accent-soft ring-1 ring-accent/40" : "hover:bg-surface-2"
+              }`}
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg text-muted">
+                <IconSpark className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5">
+                  <span className={`truncate text-sm ${isActive(a.slug) ? "text-accent" : ""}`}>
+                    {a.label}
+                  </span>
+                  {a.builtIn ? (
+                    <span className="shrink-0 rounded border border-border px-1 py-px text-[10px] text-muted">
+                      Built-in
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">
+                  {entrySnippet(a.description, a.slug)}
+                </span>
+              </span>
+            </button>
+          ))
+        )}
+      </div>
     </aside>
   );
 }

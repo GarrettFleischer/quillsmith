@@ -11,8 +11,10 @@ import { ChapterEditor, type DraftResult } from "@/components/chapter-editor";
 import { ChapterSummaryRail } from "@/components/chapter-summary";
 import { KnowledgeSidebar, type KnowledgeEntry, type StoryFields } from "@/components/knowledge-sidebar";
 import { RailStrip } from "@/components/rail-strip";
+import { WorkspaceSheets } from "@/components/workspace-sheets";
 import { useEditorStore } from "@/store/editor";
 import { useWorkspaceStore } from "@/store/workspace";
+import type { SavedAction } from "@/lib/saved-action";
 
 type Prose = {
   id: string;
@@ -55,9 +57,7 @@ export default function WritePage() {
   const novelId = params.id;
   const [data, setData] = useState<Tree | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [commands, setCommands] = useState<
-    Array<{ slug: string; label: string; description: string | null }>
-  >([]);
+  const [commands, setCommands] = useState<SavedAction[]>([]);
   const [model, setModel] = useState("anthropic/claude-sonnet-4");
   const [hasApiKey, setHasApiKey] = useState(true);
   const [draftResult, setDraftResult] = useState<DraftResult | null>(null);
@@ -66,7 +66,6 @@ export default function WritePage() {
   const setNovel = useEditorStore((s) => s.setNovel);
   const status = useEditorStore((s) => s.status);
   const leftTab = useWorkspaceStore((s) => s.leftTab);
-  const setLeftTab = useWorkspaceStore((s) => s.setLeftTab);
   const leftOpen = useWorkspaceStore((s) => s.leftOpen);
   const setLeftOpen = useWorkspaceStore((s) => s.setLeftOpen);
   const beatsOpen = useWorkspaceStore((s) => s.beatsOpen);
@@ -77,6 +76,7 @@ export default function WritePage() {
   const setChatOpen = useWorkspaceStore((s) => s.setChatOpen);
   const mobilePane = useWorkspaceStore((s) => s.mobilePane);
   const setMobilePane = useWorkspaceStore((s) => s.setMobilePane);
+  const clearCodexWindows = useWorkspaceStore((s) => s.clearCodexWindows);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/novels/${novelId}`);
@@ -91,19 +91,24 @@ export default function WritePage() {
 
   useEffect(() => {
     setNovel(novelId);
-  }, [novelId, setNovel]);
+    clearCodexWindows();
+  }, [novelId, setNovel, clearCodexWindows]);
+
+  const refreshCommands = useCallback(async () => {
+    try {
+      const s = await fetch("/api/settings").then((r) => r.json());
+      setCommands((s.commands ?? []) as SavedAction[]);
+      setModel(s.settings?.defaultModel ?? "anthropic/claude-sonnet-4");
+      setHasApiKey(Boolean(s.settings?.openrouterApiKey));
+    } catch {
+      setHasApiKey(false);
+    }
+  }, []);
 
   useEffect(() => {
     void refresh();
-    void fetch("/api/settings")
-      .then((r) => r.json())
-      .then((s) => {
-        setCommands(s.commands ?? []);
-        setModel(s.settings?.defaultModel ?? "anthropic/claude-sonnet-4");
-        setHasApiKey(Boolean(s.settings?.openrouterApiKey));
-      })
-      .catch(() => setHasApiKey(false));
-  }, [refresh]);
+    void refreshCommands();
+  }, [refresh, refreshCommands]);
 
   useEffect(() => {
     if (!data || activeChapterId) return;
@@ -252,51 +257,26 @@ export default function WritePage() {
 
         <div className={leftClass(showCodexMobile)}>
           {showLeftDesktop || showCodexMobile ? (
-            <div className="flex h-full min-h-0">
-              <div className="flex h-full flex-col border-r border-border bg-surface/70">
-                <button
-                  type="button"
-                  className={`px-2 py-3 text-xs ${leftTab === "codex" ? "bg-accent-soft text-accent" : "text-muted"}`}
-                  onClick={() => setLeftTab("codex")}
-                >
-                  Codex
-                </button>
-                <button
-                  type="button"
-                  className={`px-2 py-3 text-xs ${leftTab === "settings" ? "bg-accent-soft text-accent" : "text-muted"}`}
-                  onClick={() => setLeftTab("settings")}
-                >
-                  Settings
-                </button>
-              </div>
-              {leftTab === "codex" ? (
-                <KnowledgeSidebar
-                  novelId={novelId}
-                  entries={data.knowledge}
-                  story={data.novel}
-                  onChange={() => void refresh()}
-                  onJumpToProse={jumpToProse}
-                  onCollapse={() => {
-                    setLeftOpen(false);
-                    setMobilePane("manuscript");
-                  }}
-                  className={showCodexMobile && !showLeftDesktop ? "w-full border-r-0" : undefined}
-                />
-              ) : (
-                <ActionsSidebar
-                  onCollapse={() => {
-                    setLeftOpen(false);
-                    setMobilePane("manuscript");
-                  }}
-                  onChange={() => {
-                    void fetch("/api/settings")
-                      .then((r) => r.json())
-                      .then((s) => setCommands(s.commands ?? []));
-                  }}
-                  className={showCodexMobile && !showLeftDesktop ? "w-full border-r-0" : undefined}
-                />
-              )}
-            </div>
+            leftTab === "codex" ? (
+              <KnowledgeSidebar
+                entries={data.knowledge}
+                story={data.novel}
+                onCollapse={() => {
+                  setLeftOpen(false);
+                  setMobilePane("manuscript");
+                }}
+                className={showCodexMobile && !showLeftDesktop ? "w-full border-r-0" : undefined}
+              />
+            ) : (
+              <ActionsSidebar
+                actions={commands}
+                onCollapse={() => {
+                  setLeftOpen(false);
+                  setMobilePane("manuscript");
+                }}
+                className={showCodexMobile && !showLeftDesktop ? "w-full border-r-0" : undefined}
+              />
+            )
           ) : null}
         </div>
 
@@ -321,7 +301,7 @@ export default function WritePage() {
                     <p className="mt-2 text-xs text-muted">
                       Add an OpenRouter key in{" "}
                       <Link href="/settings" className="text-accent hover:underline">
-                        App
+                        Settings
                       </Link>{" "}
                       to use chat and Actions.
                     </p>
@@ -506,6 +486,15 @@ export default function WritePage() {
           ) : null}
         </div>
       </div>
+      <WorkspaceSheets
+        novelId={novelId}
+        entries={data.knowledge}
+        story={data.novel}
+        actions={commands}
+        onCodexChange={() => void refresh()}
+        onActionsChange={() => void refreshCommands()}
+        onJumpToProse={jumpToProse}
+      />
     </div>
   );
 }
