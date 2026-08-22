@@ -38,6 +38,11 @@ export function BeatsSidebar({
   useEffect(() => {
     if (!draggingId || !chapterId) return;
 
+    // Suppress text selection so dragging over the beat textareas doesn't
+    // paint a selection overlay or leave text highlighted after drop.
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+
     const onMove = (e: PointerEvent) => {
       const list = listRef.current;
       if (!list) return;
@@ -63,6 +68,7 @@ export function BeatsSidebar({
 
     const onUp = () => {
       setDraggingId(null);
+      window.getSelection()?.removeAllRanges();
       setItems((prev) => {
         void fetch(`/api/novels/${novelId}`, {
           method: "PATCH",
@@ -79,6 +85,7 @@ export function BeatsSidebar({
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
+      document.body.style.userSelect = prevUserSelect;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
