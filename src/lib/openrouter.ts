@@ -253,6 +253,9 @@ export async function* runAgentLoop(opts: {
   const messages = [...opts.messages];
   let finalText = "";
   let round = 0;
+  // Hard cap on model↔tool rounds so a weak model that keeps calling tools
+  // (e.g. retrying with a hallucinated id) can never loop forever.
+  const MAX_ROUNDS = 16;
 
   const summarize = () =>
     yieldSummaryOnStop({
@@ -265,6 +268,16 @@ export async function* runAgentLoop(opts: {
     while (true) {
       if (opts.signal?.aborted) {
         yield* summarize();
+        return;
+      }
+
+      if (round >= MAX_ROUNDS) {
+        yield {
+          type: "done",
+          text:
+            finalText.trim() ||
+            "Stopped after reaching the tool-step limit without a final answer.",
+        };
         return;
       }
 

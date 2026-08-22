@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ActionsSidebar } from "@/components/actions-sidebar";
@@ -15,7 +15,7 @@ import { RailStrip } from "@/components/rail-strip";
 import { WorkspaceSheets } from "@/components/workspace-sheets";
 import { useEditorStore } from "@/store/editor";
 import { useWorkspaceStore } from "@/store/workspace";
-import { actLabel, chapterLabel } from "@/lib/manuscript";
+import { actLabel, actName, chapterLabel, chapterName } from "@/lib/manuscript";
 import type { SavedAction } from "@/lib/saved-action";
 
 type Prose = {
@@ -32,6 +32,7 @@ type Tree = {
     id: string;
     title: string;
     brief: string | null;
+    summary?: string | null;
     chapters: Array<{
       id: string;
       title: string;
@@ -149,6 +150,7 @@ export default function WritePage() {
             ...ch,
             actId: act.id,
             actTitle: act.title,
+            actSummary: act.summary ?? "",
             actIndex: data.acts.indexOf(act),
             chapterIndex: act.chapters.indexOf(ch),
           };
@@ -162,6 +164,7 @@ export default function WritePage() {
           ...ch,
           actId: act.id,
           actTitle: act.title,
+          actSummary: act.summary ?? "",
           actIndex: data.acts.indexOf(act),
           chapterIndex: act.chapters.indexOf(ch),
         }
@@ -169,6 +172,30 @@ export default function WritePage() {
   }, [data, activeChapterId]);
 
   const prose = activeChapter?.prose ?? activeChapter?.scenes[0] ?? null;
+
+  async function saveChapterMeta(chapterId: string, title: string, goal: string) {
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "upsertChapter",
+        payload: { id: chapterId, title: title.trim(), goal },
+      }),
+    });
+    await refresh();
+  }
+
+  async function saveActMeta(actId: string, name: string) {
+    await fetch(`/api/novels/${novelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "upsertAct",
+        payload: { id: actId, title: name.trim() },
+      }),
+    });
+    await refresh();
+  }
 
   async function addAct() {
     const created = await fetch(`/api/novels/${novelId}`, {
@@ -440,19 +467,18 @@ export default function WritePage() {
                 </div>
               ) : activeChapter ? (
                 <>
-                  <header className="mb-6 border-b border-border pb-4">
-                    <p className="text-xs uppercase tracking-wide text-muted">
-                      {actLabel(activeChapter.actIndex, activeChapter.actTitle)}
-                    </p>
-                    <h1 className="mt-1 font-display text-4xl leading-tight tracking-tight">
-                      {chapterLabel(activeChapter.chapterIndex, activeChapter.title)}
-                    </h1>
-                    {activeChapter.goal ? (
-                      <p className="mt-3 max-w-prose text-sm italic text-muted">
-                        {activeChapter.goal}
-                      </p>
-                    ) : null}
-                  </header>
+                  <ChapterHeader
+                    key={`hdr-${activeChapter.id}`}
+                    actIndex={activeChapter.actIndex}
+                    chapterIndex={activeChapter.chapterIndex}
+                    initialActName={actName(activeChapter.actTitle)}
+                    initialChapterName={chapterName(activeChapter.title)}
+                    initialGoal={activeChapter.goal ?? ""}
+                    onSaveAct={(name) => void saveActMeta(activeChapter.actId, name)}
+                    onSaveChapter={(title, goal) =>
+                      void saveChapterMeta(activeChapter.id, title, goal)
+                    }
+                  />
                   {prose ? (
                     <ChapterEditor
                       key={prose.id}
@@ -498,7 +524,9 @@ export default function WritePage() {
                   ? chapterLabel(activeChapter.chapterIndex, activeChapter.title)
                   : undefined
               }
+              chapterSummary={activeChapter?.summary ?? ""}
               beats={activeChapter?.beats ?? []}
+              hasApiKey={hasApiKey}
               onChange={() => void refresh()}
               onCollapse={() => {
                 setBeatsOpen(false);
@@ -528,6 +556,13 @@ export default function WritePage() {
                   : undefined
               }
               chapterSummary={activeChapter?.summary ?? ""}
+              actId={activeChapter?.actId ?? null}
+              actTitle={
+                activeChapter
+                  ? actLabel(activeChapter.actIndex, activeChapter.actTitle)
+                  : undefined
+              }
+              actSummary={activeChapter?.actSummary ?? ""}
               onChange={() => void refresh()}
               onCollapse={() => setSummaryOpen(false)}
               className={showPlanMobile && !showSummaryDesktop ? "w-full border-l-0" : undefined}
@@ -574,6 +609,77 @@ export default function WritePage() {
         onJumpToProse={jumpToProse}
       />
     </div>
+  );
+}
+
+function ChapterHeader({
+  actIndex,
+  chapterIndex,
+  initialActName,
+  initialChapterName,
+  initialGoal,
+  onSaveAct,
+  onSaveChapter,
+}: {
+  actIndex: number;
+  chapterIndex: number;
+  initialActName: string;
+  initialChapterName: string;
+  initialGoal: string;
+  onSaveAct: (name: string) => void;
+  onSaveChapter: (title: string, goal: string) => void;
+}) {
+  const [actNameDraft, setActNameDraft] = useState(initialActName);
+  const [titleDraft, setTitleDraft] = useState(initialChapterName);
+  const [goalDraft, setGoalDraft] = useState(initialGoal);
+
+  const blurOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+  };
+
+  return (
+    <header className="mb-6 border-b border-border pb-4">
+      <input
+        aria-label="Act name"
+        className="w-full bg-transparent text-xs uppercase tracking-wide text-muted outline-none placeholder:text-muted/60 focus:text-text"
+        value={actNameDraft}
+        placeholder={`Act ${actIndex + 1}`}
+        onChange={(e) => setActNameDraft(e.target.value)}
+        onBlur={() => {
+          if (actNameDraft !== initialActName) onSaveAct(actNameDraft);
+        }}
+        onKeyDown={blurOnEnter}
+      />
+      <input
+        aria-label="Chapter title"
+        className="mt-1 w-full bg-transparent font-display text-4xl leading-tight tracking-tight outline-none placeholder:text-muted/50"
+        value={titleDraft}
+        placeholder={`Chapter ${chapterIndex + 1}`}
+        onChange={(e) => setTitleDraft(e.target.value)}
+        onBlur={() => {
+          if (titleDraft !== initialChapterName || goalDraft !== initialGoal) {
+            onSaveChapter(titleDraft, goalDraft);
+          }
+        }}
+        onKeyDown={blurOnEnter}
+      />
+      <input
+        aria-label="Chapter goal"
+        className="mt-3 w-full max-w-prose bg-transparent text-sm italic text-muted outline-none placeholder:not-italic placeholder:text-muted/60 focus:text-text"
+        value={goalDraft}
+        placeholder="Chapter goal — what this chapter must accomplish…"
+        onChange={(e) => setGoalDraft(e.target.value)}
+        onBlur={() => {
+          if (goalDraft !== initialGoal || titleDraft !== initialChapterName) {
+            onSaveChapter(titleDraft, goalDraft);
+          }
+        }}
+        onKeyDown={blurOnEnter}
+      />
+    </header>
   );
 }
 
