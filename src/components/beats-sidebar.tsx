@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { IconSpark } from "@/components/codex-icons";
 
 export type Beat = { id: string; content: string; order: number };
 
@@ -160,17 +161,36 @@ export function BeatsSidebar({
       <div className="border-b border-border px-3 py-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-serif text-lg">Beats</h2>
-          {onCollapse ? (
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              className="cursor-pointer text-xs text-muted hover:underline"
-              onClick={onCollapse}
+              disabled={!canGenerate || generating}
+              title={
+                !hasApiKey
+                  ? "Add an OpenRouter key in Settings"
+                  : !chapterSummary?.trim()
+                    ? "Write a chapter summary first"
+                    : "Generate beats from the chapter summary"
+              }
+              className="inline-flex cursor-pointer items-center gap-1 text-xs text-accent hover:underline disabled:cursor-not-allowed disabled:text-muted/40 disabled:no-underline"
+              onClick={() => void generateBeats()}
             >
-              Hide
+              <IconSpark className="h-3.5 w-3.5" />
+              {generating ? "Generating…" : "Generate"}
             </button>
-          ) : null}
+            {onCollapse ? (
+              <button
+                type="button"
+                className="cursor-pointer text-xs text-muted hover:underline"
+                onClick={onCollapse}
+              >
+                Hide
+              </button>
+            ) : null}
+          </div>
         </div>
         <p className="mt-1 text-xs text-muted">{chapterTitle}</p>
+        {error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}
       </div>
       <ul ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-auto p-3">
         {items.length === 0 ? (
@@ -224,22 +244,6 @@ export function BeatsSidebar({
         ))}
       </ul>
       <div className="border-t border-border p-3">
-        <button
-          type="button"
-          disabled={!canGenerate || generating}
-          title={
-            !hasApiKey
-              ? "Add an OpenRouter key in Settings"
-              : !chapterSummary?.trim()
-                ? "Write a chapter summary first"
-                : "Generate beats from the chapter summary"
-          }
-          className="mb-2 w-full cursor-pointer rounded-md border border-accent px-2 py-1.5 text-xs font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => void generateBeats()}
-        >
-          {generating ? "Generating beats…" : "Generate beats from summary"}
-        </button>
-        {error ? <p className="mb-2 text-xs text-danger">{error}</p> : null}
         <textarea
           className="w-full rounded-md border border-border bg-bg px-2 py-1 text-sm"
           rows={2}
