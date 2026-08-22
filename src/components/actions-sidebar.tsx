@@ -127,9 +127,7 @@ export function ActionsSidebar({
                 }
                 onClick={() => void toggleFavorite(a)}
                 className={`mt-1 mr-1 shrink-0 cursor-pointer rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                  a.favorite
-                    ? "text-accent"
-                    : "text-muted opacity-0 hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
+                  a.favorite ? "text-accent" : "text-muted/40 hover:text-accent"
                 }`}
               >
                 <StarIcon className="h-4 w-4" filled={a.favorite} />
