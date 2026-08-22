@@ -9,9 +9,11 @@ import {
   getChapterProse,
   getCommand,
   getNovelTree,
+  getSettings,
   listChapterChat,
   listKnowledge,
 } from "@/lib/novels";
+import { runNeedleLoop } from "@/lib/needle-loop";
 import { actLabel, chapterLabel, findChapterPlace } from "@/lib/manuscript";
 import { compileTemplate } from "@/lib/prompt";
 import { buildCodex } from "@/lib/prompts/context";
@@ -134,9 +136,12 @@ ${buildCodex(mentioned)}`;
       { role: "user", content: userBits },
     ];
 
+    const useNeedle = getSettings().needleTools === true;
+    const loop = useNeedle ? runNeedleLoop : runAgentLoop;
+
     return agentSseResponse(async function* (signal) {
       let full = "";
-      for await (const event of runAgentLoop({
+      for await (const event of loop({
         model,
         temperature,
         messages,
