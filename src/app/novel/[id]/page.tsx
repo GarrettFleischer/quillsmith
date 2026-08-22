@@ -409,8 +409,10 @@ export default function WritePage() {
           {showLeftDesktop || showCodexMobile ? (
             leftTab === "codex" ? (
               <KnowledgeSidebar
+                novelId={novelId}
                 entries={data.knowledge}
                 story={data.novel}
+                onChange={() => void refresh()}
                 onCollapse={() => {
                   setLeftOpen(false);
                   setMobilePane("manuscript");

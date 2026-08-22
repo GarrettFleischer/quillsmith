@@ -86,7 +86,14 @@ ${codex || "(none)"}`,
     ];
 
     const raw = await collectAgentText(
-      runAgentLoop({ model, temperature: 0.4, messages, novelId: body.novelId }),
+      runAgentLoop({
+        model,
+        temperature: 0.4,
+        messages,
+        novelId: body.novelId,
+        reasoningEnabled: false,
+        maxTokens: 700,
+      }),
     );
 
     let beatLines: string[] = [];

@@ -249,7 +249,12 @@ export async function* runAgentLoop(opts: {
   novelId: string;
   chapterId?: string;
   signal?: AbortSignal;
+  // Structured/JSON tasks disable reasoning: many free models are reasoning
+  // models that otherwise burn tokens on chain-of-thought and answer slowly.
+  reasoningEnabled?: boolean;
+  maxTokens?: number;
 }): AsyncGenerator<AgentEvent> {
+  const reasoningOff = opts.reasoningEnabled === false;
   const messages = [...opts.messages];
   let finalText = "";
   let round = 0;
@@ -291,7 +296,9 @@ export async function* runAgentLoop(opts: {
             model: opts.model,
             temperature: opts.temperature,
             stream: true,
-            include_reasoning: true,
+            include_reasoning: !reasoningOff,
+            ...(reasoningOff ? { reasoning: { enabled: false } } : {}),
+            ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
             messages,
             ...(opts.tools?.length ? { tools: opts.tools, tool_choice: "auto" } : {}),
           },
