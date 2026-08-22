@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type Beat = { id: string; content: string; order: number };
 
@@ -29,10 +29,61 @@ export function BeatsSidebar({
   // in-place mutations below keep `items` in sync without a prop-sync effect.
   const [items, setItems] = useState(beats);
   const [draft, setDraft] = useState("");
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const listRef = useRef<HTMLUListElement>(null);
+
+  // Pointer-based drag reorder (works with mouse and touch).
+  useEffect(() => {
+    if (!draggingId || !chapterId) return;
+
+    const onMove = (e: PointerEvent) => {
+      const list = listRef.current;
+      if (!list) return;
+      const rows = Array.from(
+        list.querySelectorAll<HTMLElement>("[data-beat-id]"),
+      );
+      const over = rows.find((el) => {
+        const r = el.getBoundingClientRect();
+        return e.clientY >= r.top && e.clientY <= r.bottom;
+      });
+      const overId = over?.getAttribute("data-beat-id");
+      if (!overId || overId === draggingId) return;
+      setItems((prev) => {
+        const from = prev.findIndex((b) => b.id === draggingId);
+        const to = prev.findIndex((b) => b.id === overId);
+        if (from === -1 || to === -1 || from === to) return prev;
+        const next = [...prev];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        return next;
+      });
+    };
+
+    const onUp = () => {
+      setDraggingId(null);
+      setItems((prev) => {
+        void fetch(`/api/novels/${novelId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "reorderBeats",
+            payload: { chapterId, orderedIds: prev.map((b) => b.id) },
+          }),
+        }).then(() => onChange());
+        return prev;
+      });
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingId, chapterId]);
 
   if (!chapterId) {
     return (
@@ -67,30 +118,6 @@ export function BeatsSidebar({
       body: JSON.stringify({ action: "deleteBeat", payload: { beatId } }),
     });
     onChange();
-  }
-
-  async function persistOrder(next: Beat[]) {
-    await fetch(`/api/novels/${novelId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "reorderBeats",
-        payload: { chapterId, orderedIds: next.map((b) => b.id) },
-      }),
-    });
-    onChange();
-  }
-
-  function handleDrop(targetIndex: number) {
-    setOverIndex(null);
-    const from = dragIndex;
-    setDragIndex(null);
-    if (from === null || from === targetIndex) return;
-    const next = [...items];
-    const [moved] = next.splice(from, 1);
-    next.splice(targetIndex, 0, moved);
-    setItems(next);
-    void persistOrder(next);
   }
 
   async function generateBeats() {
@@ -138,39 +165,30 @@ export function BeatsSidebar({
         </div>
         <p className="mt-1 text-xs text-muted">{chapterTitle}</p>
       </div>
-      <ul className="min-h-0 flex-1 space-y-2 overflow-auto p-3">
+      <ul ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-auto p-3">
         {items.length === 0 ? (
           <li className="rounded-md border border-dashed border-border/70 px-2 py-3 text-xs text-muted">
             No beats yet. Write a summary, then Generate beats — or add your own below.
           </li>
         ) : null}
-        {items.map((b, i) => (
+        {items.map((b) => (
           <li
             key={b.id}
-            onDragOver={(e) => {
-              if (dragIndex === null) return;
-              e.preventDefault();
-              if (overIndex !== i) setOverIndex(i);
-            }}
-            onDrop={() => handleDrop(i)}
-            className={`rounded-md border bg-bg p-2 transition ${
-              overIndex === i && dragIndex !== null && dragIndex !== i
-                ? "border-accent ring-1 ring-accent/40"
-                : "border-border"
-            } ${dragIndex === i ? "opacity-50" : ""}`}
+            data-beat-id={b.id}
+            className={`rounded-md border border-border bg-bg p-2 transition ${
+              draggingId === b.id ? "opacity-60 ring-1 ring-accent" : ""
+            }`}
           >
             <div className="flex items-start gap-1.5">
               <button
                 type="button"
                 aria-label="Drag to reorder beat"
                 title="Drag to reorder"
-                draggable
-                onDragStart={() => setDragIndex(i)}
-                onDragEnd={() => {
-                  setDragIndex(null);
-                  setOverIndex(null);
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  setDraggingId(b.id);
                 }}
-                className="mt-0.5 shrink-0 cursor-grab select-none rounded px-1 py-0.5 text-muted hover:bg-surface-2 hover:text-text active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="mt-0.5 shrink-0 cursor-grab touch-none select-none rounded px-1 py-0.5 text-muted hover:bg-surface-2 hover:text-text active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <GripIcon className="h-4 w-4" />
               </button>
