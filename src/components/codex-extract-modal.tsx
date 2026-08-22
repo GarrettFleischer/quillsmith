@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { CODEX_TYPES, CODEX_TYPE_SINGULAR, normalizeCodexType } from "@/lib/codex-ui";
 
 type Proposal = {
@@ -61,6 +62,8 @@ export function CodexExtractModal({
 
   const selectedCount = rows.filter((r) => r.include).length;
 
+  if (typeof document === "undefined") return null;
+
   async function save() {
     setSaving(true);
     setError("");
@@ -90,7 +93,7 @@ export function CodexExtractModal({
     }
   }
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       role="dialog"
@@ -226,6 +229,7 @@ export function CodexExtractModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
