@@ -150,6 +150,7 @@ export const slashCommands = sqliteTable("slash_commands", {
   promptTemplate: text("prompt_template").notNull(),
   enableTools: text("enable_tools").notNull().default("true"),
   builtIn: integer("built_in", { mode: "boolean" }).notNull().default(false),
+  favorite: integer("favorite", { mode: "boolean" }).notNull().default(false),
 });
 
 export const commandModelOverrides = sqliteTable("command_model_overrides", {

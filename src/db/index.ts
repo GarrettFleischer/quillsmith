@@ -212,6 +212,7 @@ function migrate(sqlite: BetterSqlite3.Database) {
   ensureColumn(sqlite, "scenes", "sliders_json", "TEXT DEFAULT '{}'");
   ensureColumn(sqlite, "knowledge_entries", "sliders_json", "TEXT DEFAULT '{}'");
   ensureColumn(sqlite, "app_settings", "craft_pipeline", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(sqlite, "slash_commands", "favorite", "INTEGER NOT NULL DEFAULT 0");
 
   collapseScenesIntoChapters(sqlite);
 }

@@ -1,4 +1,4 @@
-import { getSettings, listCommands, listTaskOverrides, updateSettings, upsertTaskOverride } from "@/lib/novels";
+import { getSettings, listCommands, listTaskOverrides, setCommandFavorite, updateSettings, upsertTaskOverride } from "@/lib/novels";
 import { AI_TASKS } from "@/lib/ai-tasks";
 import { getDb } from "@/db";
 import { commandModelOverrides, slashCommands } from "@/db/schema";
@@ -81,6 +81,11 @@ export async function PATCH(req: Request) {
       })
       .run();
     return Response.json(db.select().from(slashCommands).where(eq(slashCommands.id, cmdId)).get());
+  }
+
+  if (body.action === "setCommandFavorite") {
+    const p = body.payload as { id: string; favorite: boolean };
+    return Response.json(setCommandFavorite(p.id, Boolean(p.favorite)));
   }
 
   if (body.action === "deleteCommand") {

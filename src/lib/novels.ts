@@ -443,6 +443,12 @@ export function getCommand(slug: string) {
   return getDb().select().from(slashCommands).where(eq(slashCommands.slug, slug)).get();
 }
 
+export function setCommandFavorite(id: string, favorite: boolean) {
+  const db = getDb();
+  db.update(slashCommands).set({ favorite }).where(eq(slashCommands.id, id)).run();
+  return db.select().from(slashCommands).where(eq(slashCommands.id, id)).get();
+}
+
 export function getCommandOverride(commandId: string, modelId: string) {
   return getDb()
     .select()

@@ -420,6 +420,7 @@ export default function WritePage() {
             ) : (
               <ActionsSidebar
                 actions={commands}
+                onChange={() => void refreshCommands()}
                 onCollapse={() => {
                   setLeftOpen(false);
                   setMobilePane("manuscript");

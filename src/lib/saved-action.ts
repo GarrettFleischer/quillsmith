@@ -7,6 +7,7 @@ export type SavedAction = {
   promptTemplate: string;
   enableTools: string;
   builtIn: boolean;
+  favorite: boolean;
 };
 
 export const PRIMARY_ACTION_VARS = [
@@ -29,4 +30,5 @@ export const NEW_ACTION_DRAFT: SavedAction = {
     "Instruction: {{userInstruction}}\n\nSelection:\n{{selection}}\n\nChapter:\n{{currentChapter}}\n\nMentioned Codex:\n{{mentionedCodex}}",
   enableTools: "true",
   builtIn: false,
+  favorite: false,
 };
