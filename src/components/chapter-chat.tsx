@@ -12,7 +12,12 @@ import { useEditorStore } from "@/store/editor";
 import { useWorkspaceStore } from "@/store/workspace";
 import type { DraftResult } from "@/components/chapter-editor";
 
-type Command = { slug: string; label: string; description: string | null };
+type Command = {
+  slug: string;
+  label: string;
+  description: string | null;
+  favorite?: boolean;
+};
 type ChatMessage = {
   id: string;
   role: string;
@@ -63,6 +68,7 @@ export function ChapterChat({
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const action = commands.find((c) => c.slug === actionSlug) ?? null;
+  const favorites = commands.filter((c) => c.favorite);
 
   async function load() {
     if (!chapterId) return;
@@ -215,7 +221,11 @@ export function ChapterChat({
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-serif text-lg">Chat</h2>
           {onCollapse ? (
-            <button type="button" className="text-xs text-muted hover:underline" onClick={onCollapse}>
+            <button
+              type="button"
+              className="cursor-pointer text-xs text-muted hover:underline"
+              onClick={onCollapse}
+            >
               Hide
             </button>
           ) : null}
@@ -228,7 +238,7 @@ export function ChapterChat({
         ) : null}
         {messages.map((m) => (
           <div key={m.id} className={m.role === "user" ? "text-text" : "text-muted"}>
-            <p className="text-[10px] uppercase tracking-wide text-muted">
+            <p className="text-xs uppercase tracking-wide text-muted">
               {m.role === "user" ? "You" : "Assistant"}
             </p>
             <p className="mt-1 whitespace-pre-wrap">{m.content}</p>
@@ -244,30 +254,32 @@ export function ChapterChat({
       ) : null}
       {error ? <p className="px-3 text-xs text-danger">{error}</p> : null}
       <div className="border-t border-border p-3">
-        <div className="mb-2 flex flex-wrap gap-1">
-          {commands.slice(0, 8).map((c) => (
-            <button
-              key={c.slug}
-              type="button"
-              className={`rounded-md border px-1.5 py-0.5 text-[11px] ${
-                actionSlug === c.slug
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-muted hover:text-text"
-              }`}
-              onClick={() => {
-                if (actionSlug === c.slug) clearAction();
-                else setActionSlug(c.slug);
-              }}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+        {favorites.length > 0 ? (
+          <div className="mb-2 flex flex-wrap gap-1">
+            {favorites.map((c) => (
+              <button
+                key={c.slug}
+                type="button"
+                className={`cursor-pointer rounded-md border px-1.5 py-0.5 text-xs ${
+                  actionSlug === c.slug
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border text-muted hover:text-text"
+                }`}
+                onClick={() => {
+                  if (actionSlug === c.slug) clearAction();
+                  else setActionSlug(c.slug);
+                }}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="mb-2 flex flex-wrap gap-1">
           {selection ? (
             <button
               type="button"
-              className="rounded-md border border-border bg-bg px-1.5 py-0.5 text-[11px]"
+              className="cursor-pointer rounded-md border border-border bg-bg px-1.5 py-0.5 text-xs"
               title={selection}
               onClick={clearSelection}
             >
@@ -277,7 +289,7 @@ export function ChapterChat({
           {action ? (
             <button
               type="button"
-              className="rounded-md border border-accent bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent"
+              className="cursor-pointer rounded-md border border-accent bg-accent-soft px-1.5 py-0.5 text-xs text-accent"
               onClick={() => editAction(action.slug)}
             >
               {action.label}
@@ -302,7 +314,7 @@ export function ChapterChat({
           {busy ? (
             <button
               type="button"
-              className="rounded-md border border-danger px-2 py-1 text-xs text-danger"
+              className="cursor-pointer rounded-md border border-danger px-2 py-1 text-xs text-danger"
               onClick={() => {
                 if (runIdRef.current) void stopAgentRun(runIdRef.current);
               }}
@@ -312,7 +324,7 @@ export function ChapterChat({
           ) : (
             <button
               type="button"
-              className="rounded-md bg-accent px-2 py-1 text-xs text-bg disabled:opacity-50"
+              className="cursor-pointer rounded-md bg-accent px-2 py-1 text-xs text-bg disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!hasApiKey || (!draft.trim() && !selection && !action)}
               onClick={() => void submit()}
             >

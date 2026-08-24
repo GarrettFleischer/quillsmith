@@ -1,5 +1,4 @@
-import { getSettings, listCommands, listTaskOverrides, updateSettings, upsertTaskOverride } from "@/lib/novels";
-import { AI_TASKS } from "@/lib/ai-tasks";
+import { getSettings, listCommands, setCommandFavorite, updateSettings } from "@/lib/novels";
 import { getDb } from "@/db";
 import { commandModelOverrides, slashCommands } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -12,15 +11,6 @@ export async function GET() {
     settings: getSettings(),
     commands: listCommands(),
     overrides: getDb().select().from(commandModelOverrides).all(),
-    taskOverrides: listTaskOverrides(),
-    tasks: AI_TASKS.map((t) => ({
-      id: t.id,
-      label: t.label,
-      description: t.description,
-      defaultModel: t.defaultModel,
-      temperature: t.temperature,
-      group: t.group,
-    })),
   });
 }
 
@@ -44,6 +34,7 @@ export async function PATCH(req: Request) {
       defaultTemperature?: number;
       promptTemplate: string;
       enableTools?: string;
+      model?: string;
     };
     if (p.id) {
       const existing = db.select().from(slashCommands).where(eq(slashCommands.id, p.id)).get();
@@ -60,6 +51,7 @@ export async function PATCH(req: Request) {
           defaultTemperature: p.defaultTemperature,
           promptTemplate: p.promptTemplate,
           enableTools: p.enableTools ?? "true",
+          model: (p.model ?? "").trim(),
           // Editing a built-in forks it so app prompt sync won't overwrite custom work.
           builtIn: false,
         })
@@ -77,10 +69,16 @@ export async function PATCH(req: Request) {
         defaultTemperature: p.defaultTemperature ?? 0.7,
         promptTemplate: p.promptTemplate,
         enableTools: p.enableTools ?? "true",
+        model: (p.model ?? "").trim(),
         builtIn: false,
       })
       .run();
     return Response.json(db.select().from(slashCommands).where(eq(slashCommands.id, cmdId)).get());
+  }
+
+  if (body.action === "setCommandFavorite") {
+    const p = body.payload as { id: string; favorite: boolean };
+    return Response.json(setCommandFavorite(p.id, Boolean(p.favorite)));
   }
 
   if (body.action === "deleteCommand") {
@@ -126,15 +124,6 @@ export async function PATCH(req: Request) {
         .run();
     }
     return Response.json(db.select().from(commandModelOverrides).all());
-  }
-
-  if (body.action === "upsertTaskOverride") {
-    const p = body.payload as {
-      taskId: string;
-      modelId: string;
-      temperature?: number | null;
-    };
-    return Response.json(upsertTaskOverride(p));
   }
 
   return Response.json({ error: "Unknown action" }, { status: 400 });

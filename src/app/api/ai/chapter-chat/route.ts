@@ -12,10 +12,11 @@ import {
   listChapterChat,
   listKnowledge,
 } from "@/lib/novels";
+import { runNeedleLoop } from "@/lib/needle-loop";
 import { actLabel, chapterLabel, findChapterPlace } from "@/lib/manuscript";
 import { compileTemplate } from "@/lib/prompt";
 import { buildCodex } from "@/lib/prompts/context";
-import { agentSseResponse, runAgentLoop, type ChatMessage } from "@/lib/openrouter";
+import { agentSseResponse, type ChatMessage } from "@/lib/openrouter";
 import { resolveTaskRuntime } from "@/lib/task-runtime";
 import { plainFromTipTap } from "@/lib/utils";
 
@@ -65,7 +66,10 @@ export async function POST(req: Request) {
     }
 
     const task = AI_TASK_BY_ID.chapter_chat;
-    const { model, temperature } = resolveTaskRuntime("chapter_chat", body.model);
+    const command = body.actionSlug ? getCommand(body.actionSlug) : null;
+    // The attached Action's model wins when set; blank inherits request/global.
+    const requestedModel = command?.model?.trim() || body.model;
+    const { model, temperature } = resolveTaskRuntime("chapter_chat", requestedModel);
     const tree = getNovelTree(body.novelId);
     if (!tree) return Response.json({ error: "Novel not found" }, { status: 404 });
 
@@ -84,7 +88,6 @@ export async function POST(req: Request) {
     const place = findChapterPlace(tree.acts, chapter.id);
     const actTitle = place ? actLabel(place.actIndex, place.act.title) : act.title;
     const chapterTitle = place ? chapterLabel(place.chapterIndex, place.chapter.title) : chapter.title;
-    const command = body.actionSlug ? getCommand(body.actionSlug) : null;
     const compiledAction = command
       ? compileTemplate(command.promptTemplate, {
           userInstruction: body.message,
@@ -134,9 +137,11 @@ ${buildCodex(mentioned)}`;
       { role: "user", content: userBits },
     ];
 
+    // Tool calling always goes through the local Needle model: the big model
+    // plans in plain language and Needle emits the concrete tool call.
     return agentSseResponse(async function* (signal) {
       let full = "";
-      for await (const event of runAgentLoop({
+      for await (const event of runNeedleLoop({
         model,
         temperature,
         messages,

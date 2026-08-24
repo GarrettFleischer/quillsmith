@@ -40,6 +40,7 @@ type WorkspaceState = {
   mobilePane: MobilePane;
   selection: string | null;
   actionSlug: string | null;
+  extractText: string | null;
   windows: SheetWindow[];
   focusedWindowId: string | null;
   setLeftTab: (tab: LeftTab) => void;
@@ -49,6 +50,8 @@ type WorkspaceState = {
   setChatOpen: (open: boolean) => void;
   setMobilePane: (pane: MobilePane) => void;
   sendSelectionToChat: (text: string) => void;
+  openExtract: (text: string) => void;
+  closeExtract: () => void;
   setActionSlug: (slug: string | null) => void;
   editAction: (slug: string) => void;
   clearSelection: () => void;
@@ -144,6 +147,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   mobilePane: "manuscript",
   selection: null,
   actionSlug: null,
+  extractText: null,
   windows: [],
   focusedWindowId: null,
   setLeftTab: (leftTab) => set({ leftTab, leftOpen: true }),
@@ -158,6 +162,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       chatOpen: true,
       mobilePane: "chat",
     }),
+  openExtract: (text) => set({ extractText: text.trim() || null }),
+  closeExtract: () => set({ extractText: null }),
   setActionSlug: (actionSlug) => set({ actionSlug }),
   editAction: (slug) => {
     get().openActionWindow({ kind: "action", slug });

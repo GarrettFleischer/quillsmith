@@ -3,24 +3,9 @@
 import { useEffect, useState } from "react";
 import { AppHeader } from "@/components/app-header";
 
-type TaskRow = {
-  id: string;
-  label: string;
-  description: string;
-  defaultModel: string;
-  temperature: number;
-  group: string;
-};
-
-type TaskOverride = { taskId: string; modelId: string; temperature: number | null };
-
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
-  const [tasks, setTasks] = useState<TaskRow[]>([]);
-  const [taskEdits, setTaskEdits] = useState<Record<string, { modelId: string; temperature: string }>>(
-    {},
-  );
   const [comparePrompt, setComparePrompt] = useState(
     "Write two sentences of grounded bar-room description. No metaphors.",
   );
@@ -36,18 +21,8 @@ export default function SettingsPage() {
     const data = await res.json();
     setApiKey(data.settings?.openrouterApiKey ?? "");
     setModel(data.settings?.defaultModel ?? "");
-    setTasks(data.tasks ?? []);
     setDensityJson(data.settings?.densityThresholdsJson ?? "");
     setCraftPipeline(data.settings?.craftPipeline !== false);
-    const edits: Record<string, { modelId: string; temperature: string }> = {};
-    for (const t of data.tasks ?? []) {
-      const ov = (data.taskOverrides ?? []).find((o: TaskOverride) => o.taskId === t.id);
-      edits[t.id] = {
-        modelId: ov?.modelId ?? t.defaultModel,
-        temperature: String(ov?.temperature ?? t.temperature),
-      };
-    }
-    setTaskEdits(edits);
   }
 
   useEffect(() => {
@@ -138,93 +113,6 @@ export default function SettingsPage() {
             }}
           >
             Save pipeline
-          </button>
-        </section>
-
-        <section className="mt-8 rounded border border-border bg-surface p-4">
-          <h2 className="font-serif text-xl">Per-task models</h2>
-          <p className="mt-1 text-sm text-muted">
-            Assign different models to Layer brief / dialogue / prose / climax — Expand uses those
-            steps. Cheap models for curate, physics, and checks.
-          </p>
-          <div className="mt-4 overflow-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-xs uppercase tracking-wide text-muted">
-                  <th className="pb-2 pr-2">Task</th>
-                  <th className="pb-2 pr-2">Model</th>
-                  <th className="pb-2">Temp</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map((t) => (
-                  <tr key={t.id} className="border-t border-border">
-                    <td className="py-2 pr-2 align-top">
-                      <p className="font-medium">{t.label}</p>
-                      <p className="text-xs text-muted">{t.group}</p>
-                    </td>
-                    <td className="py-2 pr-2">
-                      <input
-                        className="w-full rounded border border-border bg-bg px-2 py-1 font-mono text-xs"
-                        value={taskEdits[t.id]?.modelId ?? t.defaultModel}
-                        onChange={(e) =>
-                          setTaskEdits((prev) => ({
-                            ...prev,
-                            [t.id]: {
-                              modelId: e.target.value,
-                              temperature: prev[t.id]?.temperature ?? String(t.temperature),
-                            },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="py-2">
-                      <input
-                        className="w-20 rounded border border-border bg-bg px-2 py-1 text-xs"
-                        type="number"
-                        step="0.05"
-                        value={taskEdits[t.id]?.temperature ?? String(t.temperature)}
-                        onChange={(e) =>
-                          setTaskEdits((prev) => ({
-                            ...prev,
-                            [t.id]: {
-                              modelId: prev[t.id]?.modelId ?? t.defaultModel,
-                              temperature: e.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button
-            type="button"
-            className="mt-3 rounded bg-accent px-3 py-1.5 text-sm text-bg"
-            onClick={async () => {
-              for (const t of tasks) {
-                const edit = taskEdits[t.id];
-                if (!edit) continue;
-                await fetch("/api/settings", {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    action: "upsertTaskOverride",
-                    payload: {
-                      taskId: t.id,
-                      modelId: edit.modelId,
-                      temperature: Number(edit.temperature),
-                    },
-                  }),
-                });
-              }
-              setStatus("Task models saved");
-              await refresh();
-            }}
-          >
-            Save task models
           </button>
         </section>
 
@@ -323,7 +211,8 @@ export default function SettingsPage() {
           <h2 className="font-serif text-xl">Actions</h2>
           <p className="mt-2 text-sm text-muted">
             Saved prompt Actions (Expand, Rewrite, custom templates) are edited in the Write
-            workspace under the left Settings tab, next to Codex.
+            workspace under the left Actions tab, next to Codex. Each Action can pick its own model
+            or leave it blank to inherit the default model above.
           </p>
         </section>
       </main>

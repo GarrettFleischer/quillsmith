@@ -9,10 +9,12 @@ import { useWorkspaceStore } from "@/store/workspace";
 
 export function ActionsSidebar({
   actions,
+  onChange,
   onCollapse,
   className,
 }: {
   actions: SavedAction[];
+  onChange?: () => void;
   onCollapse?: () => void;
   className?: string;
 }) {
@@ -37,6 +39,18 @@ export function ActionsSidebar({
 
   function isActive(slug: string) {
     return activeTarget?.kind === "action" && activeTarget.slug === slug;
+  }
+
+  async function toggleFavorite(a: SavedAction) {
+    await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "setCommandFavorite",
+        payload: { id: a.id, favorite: !a.favorite },
+      }),
+    });
+    onChange?.();
   }
 
   return (
@@ -72,36 +86,72 @@ export function ActionsSidebar({
           </p>
         ) : (
           filtered.map((a) => (
-            <button
+            <div
               key={a.id}
-              type="button"
-              onClick={() => openActionWindow({ kind: "action", slug: a.slug })}
-              className={`mb-0.5 flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
+              className={`group mb-0.5 flex items-start gap-1 rounded-md ${
                 isActive(a.slug) ? "bg-accent-soft ring-1 ring-accent/40" : "hover:bg-surface-2"
               }`}
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg text-muted">
-                <IconSpark className="h-4 w-4" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
-                  <span className={`truncate text-sm ${isActive(a.slug) ? "text-accent" : ""}`}>
-                    {a.label}
-                  </span>
-                  {a.builtIn ? (
-                    <span className="shrink-0 rounded border border-border px-1 py-px text-[10px] text-muted">
-                      Built-in
+              <button
+                type="button"
+                onClick={() => openActionWindow({ kind: "action", slug: a.slug })}
+                className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg text-muted">
+                  <IconSpark className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className={`truncate text-sm ${isActive(a.slug) ? "text-accent" : ""}`}>
+                      {a.label}
                     </span>
-                  ) : null}
+                    {a.builtIn ? (
+                      <span className="shrink-0 rounded border border-border px-1 py-px text-xs text-muted">
+                        Built-in
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted">
+                    {entrySnippet(a.description, a.slug)}
+                  </span>
                 </span>
-                <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">
-                  {entrySnippet(a.description, a.slug)}
-                </span>
-              </span>
-            </button>
+              </button>
+              <button
+                type="button"
+                aria-label={a.favorite ? `Unfavorite ${a.label}` : `Favorite ${a.label}`}
+                aria-pressed={a.favorite}
+                title={
+                  a.favorite
+                    ? "Favorited — shown as a quick action in Chat"
+                    : "Favorite — pin as a quick action in Chat"
+                }
+                onClick={() => void toggleFavorite(a)}
+                className={`mt-1 mr-1 shrink-0 cursor-pointer rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  a.favorite ? "text-accent" : "text-muted/40 hover:text-accent"
+                }`}
+              >
+                <StarIcon className="h-4 w-4" filled={a.favorite} />
+              </button>
+            </div>
           ))
         )}
       </div>
     </aside>
+  );
+}
+
+function StarIcon({ className, filled }: { className?: string; filled?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L12 16.98l-5.2 2.53.99-5.79-4.21-4.1 5.82-.85L12 3.5z" />
+    </svg>
   );
 }

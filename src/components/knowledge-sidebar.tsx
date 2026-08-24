@@ -43,7 +43,7 @@ function TypeMark({ type, name }: { type: CodexType | "story"; name: string }) {
   if (type === "character") {
     const initial = (name.trim()[0] || "?").toUpperCase();
     return (
-      <span className={`${box} rounded-full border border-border bg-bg text-[11px] font-medium`}>
+      <span className={`${box} rounded-full border border-border bg-bg text-xs font-medium`}>
         {initial}
       </span>
     );
@@ -90,7 +90,7 @@ function EntryRow({
       <TypeMark type={markType} name={name} />
       <span className="min-w-0 flex-1">
         <span className={`block truncate text-sm ${active ? "text-accent" : ""}`}>{name}</span>
-        <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">{snippet}</span>
+        <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted">{snippet}</span>
       </span>
     </button>
   );
@@ -170,7 +170,7 @@ export function KnowledgeSidebar({
           </div>
           <button
             type="button"
-            className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-bg px-2 py-1.5 text-xs hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-border bg-bg px-2 py-1.5 text-xs hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             onClick={() => openCodexWindow({ kind: "new", type: "character" })}
           >
             <IconPlus className="h-3.5 w-3.5" />
@@ -198,7 +198,7 @@ export function KnowledgeSidebar({
                 <button
                   type="button"
                   aria-expanded={open}
-                  className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-1 text-left text-[11px] uppercase tracking-wide text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-1 text-left text-xs uppercase tracking-wide text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   onClick={() => toggleGroup(type)}
                 >
                   <IconChevron className="h-3 w-3" open={open} />

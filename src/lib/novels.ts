@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import {
   acts,
   appSettings,
+  beatRevisions,
   beats,
   chapters,
   coachSessions,
@@ -19,7 +20,7 @@ import {
   slashCommands,
   taskModelOverrides,
 } from "@/db/schema";
-import { EMPTY_DOC, id, now } from "@/lib/utils";
+import { EMPTY_DOC, id, mergeTipTapDocs, now, plainFromTipTap } from "@/lib/utils";
 
 export function listNovels() {
   const db = getDb();
@@ -250,6 +251,8 @@ export function upsertChapter(input: {
       updatedAt: now(),
     })
     .run();
+  // Every chapter starts with one beat to write into.
+  db.insert(beats).values({ id: id(), chapterId, order: 0, content: "", prose: "" }).run();
   touchNovel(input.novelId);
   return db.select().from(chapters).where(eq(chapters.id, chapterId)).get()!;
 }
@@ -291,6 +294,130 @@ export function upsertBeat(input: {
     })
     .run();
   touchNovel(input.novelId);
+  return db.select().from(beats).where(eq(beats.id, beatId)).get()!;
+}
+
+/** Flattened chapter prose = each beat's prose joined in order (empties skipped). */
+function chapterSceneFromBeats(chapterId: string): string {
+  const rows = getDb()
+    .select()
+    .from(beats)
+    .where(eq(beats.chapterId, chapterId))
+    .orderBy(asc(beats.order))
+    .all();
+  const parts = rows
+    .filter((b) => b.prose && plainFromTipTap(b.prose).trim().length > 0)
+    .map((b) => ({ json: b.prose }));
+  return parts.length ? mergeTipTapDocs(parts) : EMPTY_DOC;
+}
+
+/**
+ * Keep the chapter's scene (the flattened prose that AI context, export,
+ * mentions, and history all read) in sync with the per-beat prose. The beats
+ * are authoritative; the scene is a derived cache updated silently.
+ */
+export function syncChapterScene(chapterId: string, novelId: string) {
+  const db = getDb();
+  const scene = getChapterProse(chapterId);
+  if (!scene) return;
+  const content = chapterSceneFromBeats(chapterId);
+  if (scene.content === content) return;
+  db.update(scenes).set({ content, updatedAt: now() }).where(eq(scenes.id, scene.id)).run();
+  touchNovel(novelId);
+}
+
+/**
+ * Add generated beat outlines without ever destroying prose: fill any beats
+ * that are completely empty (no outline and no prose) first, then append the
+ * rest. (Replacing beats would wipe per-beat prose.)
+ */
+export function addOrFillBeats(chapterId: string, novelId: string, contents: string[]) {
+  assertChapterInNovel(chapterId, novelId);
+  const db = getDb();
+  const existing = db
+    .select()
+    .from(beats)
+    .where(eq(beats.chapterId, chapterId))
+    .orderBy(asc(beats.order))
+    .all();
+  const emptySlots = existing.filter(
+    (b) => !b.content.trim() && !(b.prose && plainFromTipTap(b.prose).trim().length > 0),
+  );
+  let slot = 0;
+  let max = existing.reduce((m, b) => Math.max(m, b.order), -1);
+  for (const content of contents.map((c) => c.trim()).filter(Boolean)) {
+    if (slot < emptySlots.length) {
+      db.update(beats).set({ content }).where(eq(beats.id, emptySlots[slot].id)).run();
+      slot++;
+    } else {
+      max += 1;
+      db.insert(beats).values({ id: id(), chapterId, order: max, content, prose: "" }).run();
+    }
+  }
+  touchNovel(novelId);
+  return db
+    .select()
+    .from(beats)
+    .where(eq(beats.chapterId, chapterId))
+    .orderBy(asc(beats.order))
+    .all();
+}
+
+/** Save one beat's prose, then re-derive the chapter's flattened scene. */
+export function saveBeatProse(beatId: string, novelId: string, content: string) {
+  const db = getDb();
+  const beat = assertBeatInNovel(beatId, novelId);
+  db.update(beats).set({ prose: content }).where(eq(beats.id, beatId)).run();
+  syncChapterScene(beat.chapterId, novelId);
+  touchNovel(novelId);
+  return db.select().from(beats).where(eq(beats.id, beatId)).get()!;
+}
+
+/** Append a history snapshot for a beat's prose. No-op if unchanged since last. */
+export function saveBeatRevision(
+  beatId: string,
+  novelId: string,
+  content: string,
+  source: "manual" | "ai" | "restore" = "manual",
+) {
+  const db = getDb();
+  assertBeatInNovel(beatId, novelId);
+  const latest = db
+    .select()
+    .from(beatRevisions)
+    .where(eq(beatRevisions.beatId, beatId))
+    .orderBy(desc(beatRevisions.createdAt))
+    .get();
+  if (latest && latest.content === content) return latest;
+  const rev = { id: id(), beatId, createdAt: now(), source, content };
+  db.insert(beatRevisions).values(rev).run();
+  return rev;
+}
+
+export function listBeatRevisions(beatId: string, novelId: string) {
+  assertBeatInNovel(beatId, novelId);
+  return getDb()
+    .select()
+    .from(beatRevisions)
+    .where(eq(beatRevisions.beatId, beatId))
+    .orderBy(desc(beatRevisions.createdAt))
+    .all();
+}
+
+/** Restore a beat to a past revision (recorded as a new "restore" snapshot). */
+export function restoreBeatRevision(beatId: string, novelId: string, revisionId: string) {
+  const db = getDb();
+  const beat = assertBeatInNovel(beatId, novelId);
+  const rev = db
+    .select()
+    .from(beatRevisions)
+    .where(and(eq(beatRevisions.id, revisionId), eq(beatRevisions.beatId, beatId)))
+    .get();
+  if (!rev) throw new Error("Revision not found");
+  db.update(beats).set({ prose: rev.content }).where(eq(beats.id, beatId)).run();
+  saveBeatRevision(beatId, novelId, rev.content, "restore");
+  syncChapterScene(beat.chapterId, novelId);
+  touchNovel(novelId);
   return db.select().from(beats).where(eq(beats.id, beatId)).get()!;
 }
 
@@ -441,6 +568,12 @@ export function listCommands() {
 
 export function getCommand(slug: string) {
   return getDb().select().from(slashCommands).where(eq(slashCommands.slug, slug)).get();
+}
+
+export function setCommandFavorite(id: string, favorite: boolean) {
+  const db = getDb();
+  db.update(slashCommands).set({ favorite }).where(eq(slashCommands.id, id)).run();
+  return db.select().from(slashCommands).where(eq(slashCommands.id, id)).get();
 }
 
 export function getCommandOverride(commandId: string, modelId: string) {
@@ -613,8 +746,9 @@ export function deleteChapter(chapterId: string, novelId: string) {
 }
 
 export function deleteBeat(beatId: string, novelId: string) {
-  assertBeatInNovel(beatId, novelId);
+  const beat = assertBeatInNovel(beatId, novelId);
   getDb().delete(beats).where(eq(beats.id, beatId)).run();
+  syncChapterScene(beat.chapterId, novelId);
   touchNovel(novelId);
 }
 
@@ -698,6 +832,7 @@ export function reorderBeats(chapterId: string, orderedIds: string[], novelId: s
   orderedIds.forEach((beatId, index) => {
     db.update(beats).set({ order: index }).where(eq(beats.id, beatId)).run();
   });
+  syncChapterScene(chapterId, novelId);
   touchNovel(novelId);
   return db
     .select()
@@ -848,6 +983,7 @@ export function replaceChapterBeats(
       })
       .run();
   });
+  syncChapterScene(chapterId, novelId);
   touchNovel(novelId);
   return db
     .select()

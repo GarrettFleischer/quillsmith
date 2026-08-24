@@ -19,6 +19,10 @@ import {
   reorderChapters,
   replaceChapterBeats,
   restoreSceneRevision,
+  listBeatRevisions,
+  restoreBeatRevision,
+  saveBeatProse,
+  saveBeatRevision,
   saveSceneContent,
   sceneBelongsToNovel,
   chapterBelongsToNovel,
@@ -86,6 +90,25 @@ export async function PATCH(
           ...(body.payload as object as Parameters<typeof upsertBeat>[0]),
           novelId: id,
         }),
+      );
+    case "saveBeatProse":
+      return Response.json(
+        saveBeatProse(String(body.payload.beatId), id, String(body.payload.content ?? "")),
+      );
+    case "saveBeatRevision":
+      return Response.json(
+        saveBeatRevision(
+          String(body.payload.beatId),
+          id,
+          String(body.payload.content ?? ""),
+          (body.payload.source as "manual" | "ai" | "restore") ?? "manual",
+        ),
+      );
+    case "listBeatRevisions":
+      return Response.json(listBeatRevisions(String(body.payload.beatId), id));
+    case "restoreBeatRevision":
+      return Response.json(
+        restoreBeatRevision(String(body.payload.beatId), id, String(body.payload.revisionId)),
       );
     case "createScene":
       return Response.json(

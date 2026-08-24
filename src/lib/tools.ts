@@ -331,11 +331,10 @@ export const CHAPTER_CHAT_TOOLS: ToolDef[] = [
     type: "function",
     function: {
       name: "update_chapter_summary",
-      description: "Replace the working summary for the current chapter",
+      description: "Replace the working summary for the current chapter (always the open chapter)",
       parameters: {
         type: "object",
         properties: {
-          chapterId: { type: "string" },
           summary: { type: "string" },
         },
         required: ["summary"],
@@ -346,11 +345,11 @@ export const CHAPTER_CHAT_TOOLS: ToolDef[] = [
     type: "function",
     function: {
       name: "replace_beats",
-      description: "Replace the chapter beat list with an ordered array of beat sentences",
+      description:
+        "Replace the current chapter's beat list with an ordered array of beat sentences",
       parameters: {
         type: "object",
         properties: {
-          chapterId: { type: "string" },
           contents: {
             type: "array",
             items: { type: "string" },
@@ -365,14 +364,11 @@ export const CHAPTER_CHAT_TOOLS: ToolDef[] = [
     type: "function",
     function: {
       name: "upsert_beat",
-      description: "Create or update one chapter beat",
+      description: "Add one beat (a single story move) to the current chapter",
       parameters: {
         type: "object",
         properties: {
-          chapterId: { type: "string" },
-          id: { type: "string" },
-          content: { type: "string" },
-          order: { type: "number" },
+          content: { type: "string", description: "one concise beat sentence" },
         },
         required: ["content"],
       },
@@ -526,14 +522,16 @@ export async function executeTool(
       return act;
     }
     case "get_chapter_goal": {
-      const chapter = db.select().from(chapters).where(eq(chapters.id, String(args.chapterId))).get();
+      const goalChapterId = ctx.chapterId ?? String(args.chapterId ?? "");
+      const chapter = db.select().from(chapters).where(eq(chapters.id, goalChapterId)).get();
       if (!chapter) return { error: "Chapter not found" };
       const act = db.select().from(acts).where(eq(acts.id, chapter.actId)).get();
       if (!act || act.novelId !== ctx.novelId) return { error: "Chapter not found" };
       return chapter;
     }
     case "get_chapter_beats": {
-      const chapter = db.select().from(chapters).where(eq(chapters.id, String(args.chapterId))).get();
+      const beatsChapterId = ctx.chapterId ?? String(args.chapterId ?? "");
+      const chapter = db.select().from(chapters).where(eq(chapters.id, beatsChapterId)).get();
       if (!chapter) return { error: "Chapter not found" };
       const act = db.select().from(acts).where(eq(acts.id, chapter.actId)).get();
       if (!act || act.novelId !== ctx.novelId) return { error: "Chapter not found" };
@@ -619,7 +617,9 @@ export async function executeTool(
       });
     }
     case "upsert_beat": {
-      const chapterId = String(args.chapterId ?? ctx.chapterId ?? "");
+      // In chapter chat the current chapter (ctx) always wins so a model that
+      // invents a chapterId can't break out of the chapter it's editing.
+      const chapterId = ctx.chapterId ?? String(args.chapterId ?? "");
       if (!chapterId) return { error: "chapterId required" };
       return upsertBeat({
         id: args.id ? String(args.id) : undefined,
@@ -630,7 +630,7 @@ export async function executeTool(
       });
     }
     case "update_chapter_summary": {
-      const chapterId = String(args.chapterId ?? ctx.chapterId ?? "");
+      const chapterId = ctx.chapterId ?? String(args.chapterId ?? "");
       if (!chapterId) return { error: "chapterId required" };
       const chapter = db.select().from(chapters).where(eq(chapters.id, chapterId)).get();
       if (!chapter) return { error: "Chapter not found" };
@@ -642,7 +642,7 @@ export async function executeTool(
       });
     }
     case "replace_beats": {
-      const chapterId = String(args.chapterId ?? ctx.chapterId ?? "");
+      const chapterId = ctx.chapterId ?? String(args.chapterId ?? "");
       if (!chapterId) return { error: "chapterId required" };
       const contents = Array.isArray(args.contents)
         ? args.contents.map((c) => String(c).trim()).filter(Boolean)

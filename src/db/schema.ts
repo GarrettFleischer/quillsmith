@@ -54,7 +54,10 @@ export const beats = sqliteTable("beats", {
     .notNull()
     .references(() => chapters.id, { onDelete: "cascade" }),
   order: integer("order").notNull(),
+  // Outline sentence for the beat.
   content: text("content").notNull().default(""),
+  // The chapter prose written for this beat (TipTap JSON; "" = empty).
+  prose: text("prose").notNull().default(""),
 });
 
 export const scenes = sqliteTable("scenes", {
@@ -79,6 +82,17 @@ export const sceneRevisions = sqliteTable("scene_revisions", {
   label: text("label"),
   content: text("content").notNull(),
   parentRevisionId: text("parent_revision_id"),
+});
+
+export const beatRevisions = sqliteTable("beat_revisions", {
+  id: text("id").primaryKey(),
+  beatId: text("beat_id")
+    .notNull()
+    .references(() => beats.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  // "manual" (typed then paused) | "ai" (Write with AI) | "restore"
+  source: text("source").notNull(),
+  content: text("content").notNull(),
 });
 
 export const knowledgeEntries = sqliteTable("knowledge_entries", {
@@ -150,6 +164,9 @@ export const slashCommands = sqliteTable("slash_commands", {
   promptTemplate: text("prompt_template").notNull(),
   enableTools: text("enable_tools").notNull().default("true"),
   builtIn: integer("built_in", { mode: "boolean" }).notNull().default(false),
+  favorite: integer("favorite", { mode: "boolean" }).notNull().default(false),
+  // Per-action model; "" means inherit the global default model.
+  model: text("model").notNull().default(""),
 });
 
 export const commandModelOverrides = sqliteTable("command_model_overrides", {
@@ -169,6 +186,7 @@ export const appSettings = sqliteTable("app_settings", {
   theme: text("theme").default("system"),
   densityThresholdsJson: text("density_thresholds_json").default(""),
   craftPipeline: integer("craft_pipeline", { mode: "boolean" }).notNull().default(true),
+  needleTools: integer("needle_tools", { mode: "boolean" }).notNull().default(false),
 });
 
 export const taskModelOverrides = sqliteTable("task_model_overrides", {

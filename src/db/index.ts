@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import * as schema from "./schema";
 import { seedIfNeeded } from "./seed";
-import { EMPTY_DOC, id, mergeTipTapDocs } from "@/lib/utils";
+import { EMPTY_DOC, id, mergeTipTapDocs, plainFromTipTap } from "@/lib/utils";
 
 const dataDir = path.join(process.cwd(), "data");
 const dbPath = path.join(dataDir, "quillsmith.db");
@@ -97,6 +97,14 @@ function migrate(sqlite: BetterSqlite3.Database) {
       label TEXT,
       content TEXT NOT NULL,
       parent_revision_id TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS beat_revisions (
+      id TEXT PRIMARY KEY,
+      beat_id TEXT NOT NULL REFERENCES beats(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      content TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS knowledge_entries (
@@ -212,8 +220,49 @@ function migrate(sqlite: BetterSqlite3.Database) {
   ensureColumn(sqlite, "scenes", "sliders_json", "TEXT DEFAULT '{}'");
   ensureColumn(sqlite, "knowledge_entries", "sliders_json", "TEXT DEFAULT '{}'");
   ensureColumn(sqlite, "app_settings", "craft_pipeline", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(sqlite, "slash_commands", "favorite", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(sqlite, "app_settings", "needle_tools", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(sqlite, "slash_commands", "model", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(sqlite, "beats", "prose", "TEXT NOT NULL DEFAULT ''");
 
   collapseScenesIntoChapters(sqlite);
+  segmentChaptersIntoBeats(sqlite);
+}
+
+/**
+ * Beats now carry their own prose (each beat is edited as its own text block).
+ * Losslessly fold any pre-existing chapter prose into the beat model and make
+ * sure every chapter has at least one beat to write into. Idempotent.
+ */
+function segmentChaptersIntoBeats(sqlite: BetterSqlite3.Database) {
+  const chapterIds = sqlite.prepare(`SELECT id FROM chapters`).all() as Array<{ id: string }>;
+  const listBeats = sqlite.prepare(
+    `SELECT id, prose FROM beats WHERE chapter_id = ? ORDER BY "order"`,
+  );
+  const firstScene = sqlite.prepare(
+    `SELECT content FROM scenes WHERE chapter_id = ? ORDER BY "order" LIMIT 1`,
+  );
+  const insertBeat = sqlite.prepare(
+    `INSERT INTO beats (id, chapter_id, "order", content, prose) VALUES (?, ?, 0, '', ?)`,
+  );
+  const setProse = sqlite.prepare(`UPDATE beats SET prose = ? WHERE id = ?`);
+
+  const hasText = (json: string | null | undefined) =>
+    Boolean(json && plainFromTipTap(json).trim().length > 0);
+
+  for (const ch of chapterIds) {
+    const beatRows = listBeats.all(ch.id) as Array<{ id: string; prose: string | null }>;
+    const scene = firstScene.get(ch.id) as { content: string } | undefined;
+    const sceneContent = scene?.content ?? "";
+    if (beatRows.length === 0) {
+      insertBeat.run(id(), ch.id, hasText(sceneContent) ? sceneContent : EMPTY_DOC);
+      continue;
+    }
+    const anyBeatProse = beatRows.some((b) => hasText(b.prose));
+    if (!anyBeatProse && hasText(sceneContent)) {
+      setProse.run(sceneContent, beatRows[0].id);
+    }
+  }
 }
 
 function ensureColumn(
