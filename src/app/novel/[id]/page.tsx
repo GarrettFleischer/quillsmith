@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ActionsSidebar } from "@/components/actions-sidebar";
 import { AppHeader } from "@/components/app-header";
-import { BeatsSidebar, type Beat } from "@/components/beats-sidebar";
+import { BeatManuscript, type Beat } from "@/components/beat-manuscript";
 import { ChapterChat } from "@/components/chapter-chat";
-import { ChapterEditor, type DraftResult } from "@/components/chapter-editor";
+import { type DraftResult } from "@/components/chapter-editor";
 import { ChapterSummaryRail } from "@/components/chapter-summary";
 import { CodexExtractModal } from "@/components/codex-extract-modal";
 import { KnowledgeSidebar, type KnowledgeEntry, type StoryFields } from "@/components/knowledge-sidebar";
@@ -72,8 +72,6 @@ export default function WritePage() {
   const leftTab = useWorkspaceStore((s) => s.leftTab);
   const leftOpen = useWorkspaceStore((s) => s.leftOpen);
   const setLeftOpen = useWorkspaceStore((s) => s.setLeftOpen);
-  const beatsOpen = useWorkspaceStore((s) => s.beatsOpen);
-  const setBeatsOpen = useWorkspaceStore((s) => s.setBeatsOpen);
   const summaryOpen = useWorkspaceStore((s) => s.summaryOpen);
   const setSummaryOpen = useWorkspaceStore((s) => s.setSummaryOpen);
   const chatOpen = useWorkspaceStore((s) => s.chatOpen);
@@ -337,7 +335,6 @@ export default function WritePage() {
   }
 
   const showLeftDesktop = leftOpen;
-  const showBeatsDesktop = beatsOpen;
   const showSummaryDesktop = summaryOpen;
   const showChatDesktop = chatOpen;
   const showCodexMobile = mobilePane === "codex";
@@ -483,22 +480,18 @@ export default function WritePage() {
                       void saveChapterMeta(activeChapter.id, title, goal)
                     }
                   />
-                  {prose ? (
-                    <ChapterEditor
-                      key={prose.id}
-                      novelId={novelId}
-                      proseId={prose.id}
-                      chapterId={activeChapter.id}
-                      actId={activeChapter.actId}
-                      initialContent={prose.content}
-                      hasApiKey={hasApiKey}
-                      draftResult={draftResult}
-                      onDraftHandled={() => setDraftResult(null)}
-                      onSaved={() => void refresh()}
-                    />
-                  ) : (
-                    <p className="text-sm text-muted">This chapter has no prose document yet.</p>
-                  )}
+                  <BeatManuscript
+                    key={activeChapter.id}
+                    novelId={novelId}
+                    chapterId={activeChapter.id}
+                    actId={activeChapter.actId}
+                    beats={activeChapter.beats ?? []}
+                    model={model}
+                    hasApiKey={hasApiKey}
+                    draftResult={draftResult}
+                    onDraftHandled={() => setDraftResult(null)}
+                    onChange={() => void refresh()}
+                  />
                 </>
               ) : null}
             </div>
@@ -510,37 +503,6 @@ export default function WritePage() {
             showPlanMobile ? "flex w-full min-h-0 flex-1 flex-col overflow-y-auto" : "hidden"
           } lg:contents`}
         >
-        {!showBeatsDesktop ? (
-          <RailStrip label="Beats" side="right" onClick={() => setBeatsOpen(true)} />
-        ) : null}
-        <div
-          className={`${showPlanMobile ? "flex min-h-0 w-full flex-1" : "hidden"} ${
-            showBeatsDesktop ? "lg:flex lg:w-auto lg:flex-none" : "lg:hidden"
-          }`}
-        >
-          {showBeatsDesktop || showPlanMobile ? (
-            <BeatsSidebar
-              key={activeChapter?.id ?? "beats"}
-              novelId={novelId}
-              chapterId={activeChapter?.id ?? null}
-              chapterTitle={
-                activeChapter
-                  ? chapterLabel(activeChapter.chapterIndex, activeChapter.title)
-                  : undefined
-              }
-              chapterSummary={activeChapter?.summary ?? ""}
-              beats={activeChapter?.beats ?? []}
-              hasApiKey={hasApiKey}
-              onChange={() => void refresh()}
-              onCollapse={() => {
-                setBeatsOpen(false);
-                setMobilePane("manuscript");
-              }}
-              className={showPlanMobile && !showBeatsDesktop ? "w-full border-l-0" : undefined}
-            />
-          ) : null}
-        </div>
-
         {!showSummaryDesktop ? (
           <RailStrip label="Summary" side="right" onClick={() => setSummaryOpen(true)} />
         ) : null}

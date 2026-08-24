@@ -54,7 +54,10 @@ export const beats = sqliteTable("beats", {
     .notNull()
     .references(() => chapters.id, { onDelete: "cascade" }),
   order: integer("order").notNull(),
+  // Outline sentence for the beat.
   content: text("content").notNull().default(""),
+  // The chapter prose written for this beat (TipTap JSON; "" = empty).
+  prose: text("prose").notNull().default(""),
 });
 
 export const scenes = sqliteTable("scenes", {
