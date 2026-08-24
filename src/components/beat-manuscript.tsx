@@ -41,9 +41,31 @@ export function BeatManuscript({
     });
   }
 
+  const [genBeats, setGenBeats] = useState(false);
+  const [genErr, setGenErr] = useState("");
+
   async function addBeat() {
     await patch("upsertBeat", { chapterId, content: "" });
     onChange();
+  }
+
+  async function generateBeats() {
+    setGenBeats(true);
+    setGenErr("");
+    try {
+      const res = await fetch("/api/ai/generate-beats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ novelId, chapterId }),
+      });
+      const data = await res.json().catch(() => ({ error: "Failed" }));
+      if (!res.ok) throw new Error(data.error || "Failed to generate beats");
+      onChange();
+    } catch (e) {
+      setGenErr(e instanceof Error ? e.message : "Failed to generate beats");
+    } finally {
+      setGenBeats(false);
+    }
   }
 
   async function removeBeat(beatId: string) {
@@ -110,13 +132,25 @@ export function BeatManuscript({
           onChange={onChange}
         />
       ))}
-      <button
-        type="button"
-        className="cursor-pointer rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted hover:border-accent hover:text-accent"
-        onClick={() => void addBeat()}
-      >
-        + Add beat
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className="cursor-pointer rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted hover:border-accent hover:text-accent"
+          onClick={() => void addBeat()}
+        >
+          + Add beat
+        </button>
+        <button
+          type="button"
+          disabled={!hasApiKey || genBeats}
+          title={hasApiKey ? "Generate beat outlines from the chapter summary" : "Add an OpenRouter key in Settings"}
+          className="cursor-pointer rounded-md border border-accent px-3 py-2 text-sm text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={() => void generateBeats()}
+        >
+          {genBeats ? "Generating beats…" : "Generate beats from summary"}
+        </button>
+      </div>
+      {genErr ? <p className="text-xs text-danger">{genErr}</p> : null}
     </div>
   );
 }

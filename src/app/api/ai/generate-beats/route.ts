@@ -2,11 +2,11 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { acts, chapters } from "@/db/schema";
 import {
+  addOrFillBeats,
   chapterBelongsToNovel,
   getNovelTree,
   getSettings,
   listKnowledge,
-  replaceChapterBeats,
 } from "@/lib/novels";
 import { buildCodex } from "@/lib/prompts/context";
 import {
@@ -117,7 +117,7 @@ ${codex || "(none)"}`,
       );
     }
 
-    const beats = replaceChapterBeats(body.chapterId, body.novelId, beatLines);
+    const beats = addOrFillBeats(body.chapterId, body.novelId, beatLines);
     return Response.json({ beats });
   } catch (e) {
     return Response.json(

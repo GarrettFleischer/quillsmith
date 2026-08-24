@@ -325,6 +325,43 @@ export function syncChapterScene(chapterId: string, novelId: string) {
   touchNovel(novelId);
 }
 
+/**
+ * Add generated beat outlines without ever destroying prose: fill any beats
+ * that are completely empty (no outline and no prose) first, then append the
+ * rest. (Replacing beats would wipe per-beat prose.)
+ */
+export function addOrFillBeats(chapterId: string, novelId: string, contents: string[]) {
+  assertChapterInNovel(chapterId, novelId);
+  const db = getDb();
+  const existing = db
+    .select()
+    .from(beats)
+    .where(eq(beats.chapterId, chapterId))
+    .orderBy(asc(beats.order))
+    .all();
+  const emptySlots = existing.filter(
+    (b) => !b.content.trim() && !(b.prose && plainFromTipTap(b.prose).trim().length > 0),
+  );
+  let slot = 0;
+  let max = existing.reduce((m, b) => Math.max(m, b.order), -1);
+  for (const content of contents.map((c) => c.trim()).filter(Boolean)) {
+    if (slot < emptySlots.length) {
+      db.update(beats).set({ content }).where(eq(beats.id, emptySlots[slot].id)).run();
+      slot++;
+    } else {
+      max += 1;
+      db.insert(beats).values({ id: id(), chapterId, order: max, content, prose: "" }).run();
+    }
+  }
+  touchNovel(novelId);
+  return db
+    .select()
+    .from(beats)
+    .where(eq(beats.chapterId, chapterId))
+    .orderBy(asc(beats.order))
+    .all();
+}
+
 /** Save one beat's prose, then re-derive the chapter's flattened scene. */
 export function saveBeatProse(beatId: string, novelId: string, content: string) {
   const db = getDb();
@@ -897,6 +934,7 @@ export function replaceChapterBeats(
       })
       .run();
   });
+  syncChapterScene(chapterId, novelId);
   touchNovel(novelId);
   return db
     .select()
