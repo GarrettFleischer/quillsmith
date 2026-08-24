@@ -40,6 +40,7 @@ export function ChapterEditor({
   const setActive = useEditorStore((s) => s.setActive);
   const setStatus = useEditorStore((s) => s.setStatus);
   const sendSelectionToChat = useWorkspaceStore((s) => s.sendSelectionToChat);
+  const openExtract = useWorkspaceStore((s) => s.openExtract);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState("");
   const [hunks, setHunks] = useState<DiffHunk[] | null>(null);
@@ -200,7 +201,7 @@ export function ChapterEditor({
         >
           <button
             type="button"
-            className="rounded-md bg-accent px-2 py-1 text-xs text-bg"
+            className="cursor-pointer rounded-md bg-accent px-2 py-1 text-xs text-bg"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               const { from, to } = editor.state.selection;
@@ -209,6 +210,18 @@ export function ChapterEditor({
             }}
           >
             Send to chat
+          </button>
+          <button
+            type="button"
+            className="cursor-pointer rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              const { from, to } = editor.state.selection;
+              const text = editor.state.doc.textBetween(from, to, " ").trim();
+              if (text) openExtract(text);
+            }}
+          >
+            Extract codex
           </button>
         </BubbleMenu>
       ) : null}

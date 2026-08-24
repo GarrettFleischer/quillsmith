@@ -14,17 +14,18 @@ import {
 
 export const runtime = "nodejs";
 
-const EXTRACT_SYSTEM = `You are a story-bible editor. From a novel's plan (premise, act and chapter summaries, and beats), extract the codex entries worth tracking.
+const EXTRACT_SYSTEM = `You are a story-bible editor. From the provided novel text, extract the codex entries worth tracking.
 
-Return NEW entries for the recurring characters, locations, lore, and items that the plan clearly involves and that are not already in the bible, and UPDATES for existing entries when the plan adds concrete facts about them.
+Return NEW entries for the characters, locations, lore, and items the text names or clearly implies and that are not already in the bible, and UPDATES for existing entries when the text adds concrete NEW facts about them (a new trait, relationship, object, or revelation). Prefer specific, grounded details over restating what the bible already says.
 
 Rules:
 - type must be one of: character, location, lore, item, other.
-- name is the canonical name as it appears in the plan.
-- summary is 1–2 sentences, grounded ONLY in the plan (no invention).
+- name is the canonical name as it appears in the text.
+- summary is 1–2 sentences, grounded ONLY in the text (no invention).
 - aliases is a comma-separated list or "".
 - For an update, set action "update" and copy the existing entry's id verbatim; otherwise action "create".
-- Do not duplicate an existing entry as a new one. Skip anything the plan does not actually evidence.
+- For an update, the summary should ADD the new fact from this text, not merely repeat the existing summary. If the text adds nothing new about an existing entry, omit it.
+- Do not duplicate an existing entry as a new one. Skip anything the text does not actually evidence.
 
 Return ONLY minified JSON in exactly this shape:
 {"entries":[{"action":"create","id":"","type":"character","name":"","aliases":"","summary":"","reason":""}]}`;
@@ -42,11 +43,13 @@ type Proposal = {
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { novelId: string; model?: string };
+    const body = (await req.json()) as { novelId: string; text?: string; model?: string };
     const tree = getNovelTree(body.novelId);
     if (!tree) return Response.json({ error: "Novel not found" }, { status: 404 });
 
     const existing = listKnowledge(body.novelId);
+
+    const passage = body.text?.trim() || "";
 
     const planLines: string[] = [];
     if (tree.novel.premise) planLines.push(`Premise: ${tree.novel.premise}`);
@@ -66,9 +69,12 @@ export async function POST(req: Request) {
       });
     });
     const plan = planLines.join("\n").trim();
-    if (!plan) {
+    // Highlighted passage is the primary source; fall back to the plan digest.
+    const source = passage || plan;
+    const sourceLabel = passage ? "Passage" : "Plan";
+    if (!source) {
       return Response.json(
-        { error: "Nothing to extract yet — add summaries and beats first." },
+        { error: "Nothing to extract — highlight some text first." },
         { status: 400 },
       );
     }
@@ -87,7 +93,7 @@ export async function POST(req: Request) {
       { role: "system", content: EXTRACT_SYSTEM },
       {
         role: "user",
-        content: `Existing codex entries:\n${existingBlock}\n\nPlan:\n${plan}`,
+        content: `Existing codex entries:\n${existingBlock}\n\n${sourceLabel}:\n${source}`,
       },
     ];
 

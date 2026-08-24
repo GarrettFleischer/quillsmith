@@ -19,10 +19,12 @@ type Row = Proposal & { include: boolean };
 
 export function CodexExtractModal({
   novelId,
+  text,
   onClose,
   onSaved,
 }: {
   novelId: string;
+  text?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -38,7 +40,7 @@ export function CodexExtractModal({
         const res = await fetch("/api/ai/extract-codex", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ novelId }),
+          body: JSON.stringify({ novelId, text }),
         });
         const data = await res.json().catch(() => ({ error: "Failed" }));
         if (!res.ok) throw new Error(data.error || "Extraction failed");
@@ -54,7 +56,7 @@ export function CodexExtractModal({
     return () => {
       cancelled = true;
     };
-  }, [novelId]);
+  }, [novelId, text]);
 
   function patch(index: number, next: Partial<Row>) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...next } : r)));
@@ -106,9 +108,9 @@ export function CodexExtractModal({
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div>
-            <h2 className="font-serif text-lg">Extract codex from your plan</h2>
+            <h2 className="font-serif text-lg">Extract codex from selection</h2>
             <p className="mt-0.5 text-xs text-muted">
-              Proposed from your act/chapter summaries and beats. Edit or exclude, then save.
+              Proposed from the highlighted passage. Edit or exclude, then save.
             </p>
           </div>
           <button

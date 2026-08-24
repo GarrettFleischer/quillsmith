@@ -9,6 +9,7 @@ import { BeatsSidebar, type Beat } from "@/components/beats-sidebar";
 import { ChapterChat } from "@/components/chapter-chat";
 import { ChapterEditor, type DraftResult } from "@/components/chapter-editor";
 import { ChapterSummaryRail } from "@/components/chapter-summary";
+import { CodexExtractModal } from "@/components/codex-extract-modal";
 import { KnowledgeSidebar, type KnowledgeEntry, type StoryFields } from "@/components/knowledge-sidebar";
 import { ManuscriptMenu } from "@/components/manuscript-menu";
 import { RailStrip } from "@/components/rail-strip";
@@ -80,6 +81,8 @@ export default function WritePage() {
   const mobilePane = useWorkspaceStore((s) => s.mobilePane);
   const setMobilePane = useWorkspaceStore((s) => s.setMobilePane);
   const clearCodexWindows = useWorkspaceStore((s) => s.clearCodexWindows);
+  const extractText = useWorkspaceStore((s) => s.extractText);
+  const closeExtract = useWorkspaceStore((s) => s.closeExtract);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/novels/${novelId}`);
@@ -409,10 +412,8 @@ export default function WritePage() {
           {showLeftDesktop || showCodexMobile ? (
             leftTab === "codex" ? (
               <KnowledgeSidebar
-                novelId={novelId}
                 entries={data.knowledge}
                 story={data.novel}
-                onChange={() => void refresh()}
                 onCollapse={() => {
                   setLeftOpen(false);
                   setMobilePane("manuscript");
@@ -611,6 +612,15 @@ export default function WritePage() {
         onActionsChange={() => void refreshCommands()}
         onJumpToProse={jumpToProse}
       />
+
+      {extractText != null ? (
+        <CodexExtractModal
+          novelId={novelId}
+          text={extractText}
+          onClose={closeExtract}
+          onSaved={() => void refresh()}
+        />
+      ) : null}
     </div>
   );
 }

@@ -9,10 +9,8 @@ import {
   IconPlus,
   IconScroll,
   IconSearch,
-  IconSpark,
   IconStory,
 } from "@/components/codex-icons";
-import { CodexExtractModal } from "@/components/codex-extract-modal";
 import { LeftRailTabs } from "@/components/left-rail-tabs";
 import { CODEX_TYPE_PLURAL, CODEX_TYPES, entrySnippet, normalizeCodexType, type CodexType } from "@/lib/codex-ui";
 import { type CodexTarget, useWorkspaceStore } from "@/store/workspace";
@@ -99,23 +97,18 @@ function EntryRow({
 }
 
 export function KnowledgeSidebar({
-  novelId,
   entries,
   story,
-  onChange,
   onCollapse,
   className,
 }: {
-  novelId: string;
   entries: KnowledgeEntry[];
   story: StoryFields;
-  onChange?: () => void;
   onCollapse?: () => void;
   className?: string;
 }) {
   const [filter, setFilter] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [extractOpen, setExtractOpen] = useState(false);
   const openCodexWindow = useWorkspaceStore((s) => s.openCodexWindow);
   const windows = useWorkspaceStore((s) => s.windows);
   const focusedId = useWorkspaceStore((s) => s.focusedWindowId);
@@ -184,14 +177,6 @@ export function KnowledgeSidebar({
             New Entry
           </button>
         </div>
-        <button
-          type="button"
-          className="mt-2 inline-flex cursor-pointer items-center gap-1 text-xs text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          onClick={() => setExtractOpen(true)}
-        >
-          <IconSpark className="h-3.5 w-3.5" />
-          Extract from summaries &amp; beats
-        </button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
         {storyVisible ? (
@@ -250,13 +235,6 @@ export function KnowledgeSidebar({
           );
         })}
       </div>
-      {extractOpen ? (
-        <CodexExtractModal
-          novelId={novelId}
-          onClose={() => setExtractOpen(false)}
-          onSaved={() => onChange?.()}
-        />
-      ) : null}
     </aside>
   );
 }
