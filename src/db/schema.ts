@@ -151,6 +151,8 @@ export const slashCommands = sqliteTable("slash_commands", {
   enableTools: text("enable_tools").notNull().default("true"),
   builtIn: integer("built_in", { mode: "boolean" }).notNull().default(false),
   favorite: integer("favorite", { mode: "boolean" }).notNull().default(false),
+  // Per-action model; "" means inherit the global default model.
+  model: text("model").notNull().default(""),
 });
 
 export const commandModelOverrides = sqliteTable("command_model_overrides", {

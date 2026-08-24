@@ -66,7 +66,10 @@ export async function POST(req: Request) {
     }
 
     const task = AI_TASK_BY_ID.chapter_chat;
-    const { model, temperature } = resolveTaskRuntime("chapter_chat", body.model);
+    const command = body.actionSlug ? getCommand(body.actionSlug) : null;
+    // The attached Action's model wins when set; blank inherits request/global.
+    const requestedModel = command?.model?.trim() || body.model;
+    const { model, temperature } = resolveTaskRuntime("chapter_chat", requestedModel);
     const tree = getNovelTree(body.novelId);
     if (!tree) return Response.json({ error: "Novel not found" }, { status: 404 });
 
@@ -85,7 +88,6 @@ export async function POST(req: Request) {
     const place = findChapterPlace(tree.acts, chapter.id);
     const actTitle = place ? actLabel(place.actIndex, place.act.title) : act.title;
     const chapterTitle = place ? chapterLabel(place.chapterIndex, place.chapter.title) : chapter.title;
-    const command = body.actionSlug ? getCommand(body.actionSlug) : null;
     const compiledAction = command
       ? compileTemplate(command.promptTemplate, {
           userInstruction: body.message,

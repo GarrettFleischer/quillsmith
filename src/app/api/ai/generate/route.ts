@@ -114,6 +114,9 @@ export async function POST(req: Request) {
     const settings = getSettings();
     const craftOn = settings.craftPipeline !== false;
 
+    // The Action's own model wins when set; blank inherits the request/global.
+    const requestedModel = command.model?.trim() || body.model;
+
     const runtimeTaskId =
       kind === "check" && checkMode === "apply"
         ? "check_apply"
@@ -121,9 +124,9 @@ export async function POST(req: Request) {
           ? "layer_brief"
           : taskId;
     const runtime = runtimeTaskId
-      ? resolveTaskRuntime(runtimeTaskId, body.model)
+      ? resolveTaskRuntime(runtimeTaskId, requestedModel)
       : {
-          model: body.model || settings.defaultModel || "anthropic/claude-sonnet-4",
+          model: requestedModel || settings.defaultModel || "anthropic/claude-sonnet-4",
           temperature: command.defaultTemperature,
         };
 

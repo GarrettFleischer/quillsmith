@@ -8,6 +8,8 @@ export type SavedAction = {
   enableTools: string;
   builtIn: boolean;
   favorite: boolean;
+  /** Per-action model; "" = inherit the global default model. */
+  model: string;
 };
 
 export const PRIMARY_ACTION_VARS = [
@@ -31,4 +33,5 @@ export const NEW_ACTION_DRAFT: SavedAction = {
   enableTools: "true",
   builtIn: false,
   favorite: false,
+  model: "",
 };

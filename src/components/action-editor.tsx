@@ -60,6 +60,7 @@ export function ActionEditor({
           defaultTemperature: draft.defaultTemperature,
           promptTemplate: draft.promptTemplate,
           enableTools: draft.enableTools,
+          model: (draft.model ?? "").trim(),
         },
       }),
     });
@@ -141,6 +142,18 @@ export function ActionEditor({
           />
         </label>
         <label className="mb-3 block text-xs text-muted">
+          Model
+          <input
+            className="mt-1 w-full rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-xs text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            value={draft.model ?? ""}
+            onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}
+            placeholder="inherit — global default model"
+          />
+          <span className="mt-1 block font-sans text-xs text-muted">
+            Leave blank to inherit the global default model from Settings.
+          </span>
+        </label>
+        <label className="mb-3 block text-xs text-muted">
           Temperature
           <input
             type="number"
@@ -160,7 +173,7 @@ export function ActionEditor({
             <button
               key={name}
               type="button"
-              className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="rounded border border-border px-1.5 py-0.5 font-mono text-xs text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={() => insertVar(name)}
             >
               {`{{${name}}}`}
@@ -185,7 +198,7 @@ export function ActionEditor({
           Enable Codex tools
         </label>
         {existing?.builtIn ? (
-          <p className="text-[11px] text-muted">
+          <p className="text-xs text-muted">
             Saving keeps your copy. Later app updates will not overwrite this prompt.
           </p>
         ) : null}

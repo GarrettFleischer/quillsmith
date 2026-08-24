@@ -214,6 +214,7 @@ function migrate(sqlite: BetterSqlite3.Database) {
   ensureColumn(sqlite, "app_settings", "craft_pipeline", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(sqlite, "slash_commands", "favorite", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(sqlite, "app_settings", "needle_tools", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(sqlite, "slash_commands", "model", "TEXT NOT NULL DEFAULT ''");
 
   collapseScenesIntoChapters(sqlite);
 }
