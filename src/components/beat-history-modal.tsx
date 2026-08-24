@@ -63,6 +63,10 @@ export function BeatHistoryModal({
     return buildRewriteHunks(older ? plainFromTipTap(older.content) : "", plainFromTipTap(cur.content));
   }, [revisions, selected]);
 
+  // The oldest version has no "before", so show it as a single passage.
+  const hasBefore = selected + 1 < revisions.length;
+  const firstText = revisions[selected] ? plainFromTipTap(revisions[selected].content) : "";
+
   async function restore() {
     const rev = revisions[selected];
     if (!rev) return;
@@ -144,6 +148,15 @@ export function BeatHistoryModal({
               <p className="p-4 text-sm text-muted">
                 As you write (after a 10s pause) or use “Write with AI”, versions are saved here.
               </p>
+            ) : !hasBefore ? (
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="border-b border-border px-4 py-1.5 text-xs uppercase tracking-wide text-muted">
+                  First version
+                </div>
+                <p className="manuscript min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 text-base leading-relaxed">
+                  {firstText || <span className="text-muted">(empty)</span>}
+                </p>
+              </div>
             ) : (
               <div className="grid min-h-0 flex-1 grid-cols-2">
                 <div className="flex min-h-0 flex-col overflow-hidden border-r border-border">
@@ -151,15 +164,7 @@ export function BeatHistoryModal({
                     Original
                   </div>
                   <p className="manuscript min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 text-base leading-relaxed">
-                    {hunks.map((h) =>
-                      h.type === "equal" ? (
-                        <span key={h.id}>{h.original}</span>
-                      ) : h.type === "insert" ? null : (
-                        <span key={h.id} className="rounded bg-danger/15 text-danger">
-                          {h.original}
-                        </span>
-                      ),
-                    )}
+                    {hunks.map((h) => h.original).join("")}
                   </p>
                 </div>
                 <div className="flex min-h-0 flex-col overflow-hidden">
