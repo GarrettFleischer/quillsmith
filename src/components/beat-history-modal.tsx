@@ -93,7 +93,7 @@ export function BeatHistoryModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-xl"
+        className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -138,33 +138,47 @@ export function BeatHistoryModal({
             )}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto p-4">
-            {error ? <p className="mb-2 text-sm text-danger">{error}</p> : null}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {error ? <p className="px-4 pt-3 text-sm text-danger">{error}</p> : null}
             {revisions.length === 0 && !loading ? (
-              <p className="text-sm text-muted">
+              <p className="p-4 text-sm text-muted">
                 As you write (after a 10s pause) or use “Write with AI”, versions are saved here.
               </p>
             ) : (
-              <p className="manuscript whitespace-pre-wrap text-base leading-relaxed">
-                {hunks.map((h) =>
-                  h.type === "equal" ? (
-                    <span key={h.id}>{h.revised}</span>
-                  ) : h.type === "insert" ? (
-                    <span key={h.id} className="rounded bg-accent-soft text-accent">
-                      {h.revised}
-                    </span>
-                  ) : h.type === "delete" ? (
-                    <span key={h.id} className="rounded bg-danger/15 text-danger line-through">
-                      {h.original}
-                    </span>
-                  ) : (
-                    <span key={h.id}>
-                      <span className="rounded bg-danger/15 text-danger line-through">{h.original}</span>
-                      <span className="rounded bg-accent-soft text-accent">{h.revised}</span>
-                    </span>
-                  ),
-                )}
-              </p>
+              <div className="grid min-h-0 flex-1 grid-cols-2">
+                <div className="flex min-h-0 flex-col overflow-hidden border-r border-border">
+                  <div className="border-b border-border px-4 py-1.5 text-xs uppercase tracking-wide text-muted">
+                    Original
+                  </div>
+                  <p className="manuscript min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 text-base leading-relaxed">
+                    {hunks.map((h) =>
+                      h.type === "equal" ? (
+                        <span key={h.id}>{h.original}</span>
+                      ) : h.type === "insert" ? null : (
+                        <span key={h.id} className="rounded bg-danger/15 text-danger line-through">
+                          {h.original}
+                        </span>
+                      ),
+                    )}
+                  </p>
+                </div>
+                <div className="flex min-h-0 flex-col overflow-hidden">
+                  <div className="border-b border-border px-4 py-1.5 text-xs uppercase tracking-wide text-muted">
+                    New
+                  </div>
+                  <p className="manuscript min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 text-base leading-relaxed">
+                    {hunks.map((h) =>
+                      h.type === "equal" ? (
+                        <span key={h.id}>{h.revised}</span>
+                      ) : h.type === "delete" ? null : (
+                        <span key={h.id} className="rounded bg-accent-soft text-accent">
+                          {h.revised}
+                        </span>
+                      ),
+                    )}
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         </div>
