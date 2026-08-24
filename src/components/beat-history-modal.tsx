@@ -155,7 +155,7 @@ export function BeatHistoryModal({
                       h.type === "equal" ? (
                         <span key={h.id}>{h.original}</span>
                       ) : h.type === "insert" ? null : (
-                        <span key={h.id} className="rounded bg-danger/15 text-danger line-through">
+                        <span key={h.id} className="rounded bg-danger/15 text-danger">
                           {h.original}
                         </span>
                       ),
