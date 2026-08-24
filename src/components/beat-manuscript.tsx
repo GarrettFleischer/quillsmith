@@ -6,6 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useEditorStore } from "@/store/editor";
 import { tipTapFromPlain } from "@/lib/utils";
+import { BeatHistoryModal } from "@/components/beat-history-modal";
 import type { DraftResult } from "@/components/chapter-editor";
 
 export type Beat = { id: string; content: string; order: number; prose?: string | null };
@@ -182,10 +183,31 @@ function BeatBlock({
 }) {
   const setActive = useEditorStore((s) => s.setActive);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snapshotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const baselinedRef = useRef(false);
   const outlineRef = useRef<HTMLTextAreaElement>(null);
   const [outline, setOutline] = useState(beat.content ?? "");
   const [writing, setWriting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState("");
+
+  const saveRevision = useCallback(
+    async (content: string, source: "manual" | "ai" | "restore") => {
+      await fetch(`/api/novels/${novelId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveBeatRevision", payload: { beatId: beat.id, content, source } }),
+      });
+    },
+    [novelId, beat.id],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (snapshotTimer.current) clearTimeout(snapshotTimer.current);
+    };
+  }, []);
 
   // Grow the outline box to fit its text (no scrollbar); the flex row then
   // takes the height of whichever side — prose or outline — is taller.
@@ -229,8 +251,19 @@ function BeatBlock({
     immediatelyRender: false,
     editorProps: { attributes: { class: "manuscript min-h-[8rem]" } },
     onUpdate: ({ editor: ed }) => {
+      // Capture the pre-edit state once so the user can undo back to it.
+      if (!baselinedRef.current) {
+        baselinedRef.current = true;
+        void saveRevision(beat.prose || JSON.stringify(EMPTY_DOC), "manual");
+      }
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => void persistProse(JSON.stringify(ed.getJSON())), 900);
+      // Snapshot the beat to history once the writer pauses for 10s.
+      if (snapshotTimer.current) clearTimeout(snapshotTimer.current);
+      snapshotTimer.current = setTimeout(
+        () => void saveRevision(JSON.stringify(ed.getJSON()), "manual"),
+        10_000,
+      );
     },
     onFocus: () => setActive({ chapterId, sceneId: beat.id, actId }),
   });
@@ -272,9 +305,13 @@ function BeatBlock({
       if (!res.ok) throw new Error(data.error || "Write failed");
       const text = String(data.text || "").trim();
       if (text) {
+        // Snapshot what's there before the AI overwrites it, then the AI result.
+        baselinedRef.current = true;
+        await saveRevision(JSON.stringify(editor.getJSON()), "manual");
         const json = tipTapFromPlain(text);
         editor.commands.setContent(JSON.parse(json));
         await persistProse(json);
+        await saveRevision(json, "ai");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Write failed");
@@ -291,7 +328,16 @@ function BeatBlock({
       </div>
       <div className="flex w-[240px] shrink-0 flex-col gap-2 border-l border-border pl-3">
         <div className="flex items-center justify-between text-xs text-muted">
-          <span className="uppercase tracking-wide">Beat {index + 1}</span>
+          <span className="flex items-center gap-2">
+            <span className="uppercase tracking-wide">Beat {index + 1}</span>
+            <button
+              type="button"
+              className="cursor-pointer hover:text-text hover:underline"
+              onClick={() => setShowHistory(true)}
+            >
+              History
+            </button>
+          </span>
           <span className="flex items-center gap-1">
             <button
               type="button"
@@ -351,6 +397,18 @@ function BeatBlock({
           {writing ? "Writing…" : "Write with AI"}
         </button>
       </div>
+      {showHistory ? (
+        <BeatHistoryModal
+          novelId={novelId}
+          beatId={beat.id}
+          label={`Beat ${index + 1}`}
+          onClose={() => setShowHistory(false)}
+          onRestored={() => {
+            setShowHistory(false);
+            onChange();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

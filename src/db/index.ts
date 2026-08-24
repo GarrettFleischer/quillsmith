@@ -99,6 +99,14 @@ function migrate(sqlite: BetterSqlite3.Database) {
       parent_revision_id TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS beat_revisions (
+      id TEXT PRIMARY KEY,
+      beat_id TEXT NOT NULL REFERENCES beats(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      content TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS knowledge_entries (
       id TEXT PRIMARY KEY,
       novel_id TEXT NOT NULL REFERENCES novels(id) ON DELETE CASCADE,

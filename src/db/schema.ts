@@ -84,6 +84,17 @@ export const sceneRevisions = sqliteTable("scene_revisions", {
   parentRevisionId: text("parent_revision_id"),
 });
 
+export const beatRevisions = sqliteTable("beat_revisions", {
+  id: text("id").primaryKey(),
+  beatId: text("beat_id")
+    .notNull()
+    .references(() => beats.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  // "manual" (typed then paused) | "ai" (Write with AI) | "restore"
+  source: text("source").notNull(),
+  content: text("content").notNull(),
+});
+
 export const knowledgeEntries = sqliteTable("knowledge_entries", {
   id: text("id").primaryKey(),
   novelId: text("novel_id")

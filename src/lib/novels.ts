@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import {
   acts,
   appSettings,
+  beatRevisions,
   beats,
   chapters,
   coachSessions,
@@ -367,6 +368,54 @@ export function saveBeatProse(beatId: string, novelId: string, content: string) 
   const db = getDb();
   const beat = assertBeatInNovel(beatId, novelId);
   db.update(beats).set({ prose: content }).where(eq(beats.id, beatId)).run();
+  syncChapterScene(beat.chapterId, novelId);
+  touchNovel(novelId);
+  return db.select().from(beats).where(eq(beats.id, beatId)).get()!;
+}
+
+/** Append a history snapshot for a beat's prose. No-op if unchanged since last. */
+export function saveBeatRevision(
+  beatId: string,
+  novelId: string,
+  content: string,
+  source: "manual" | "ai" | "restore" = "manual",
+) {
+  const db = getDb();
+  assertBeatInNovel(beatId, novelId);
+  const latest = db
+    .select()
+    .from(beatRevisions)
+    .where(eq(beatRevisions.beatId, beatId))
+    .orderBy(desc(beatRevisions.createdAt))
+    .get();
+  if (latest && latest.content === content) return latest;
+  const rev = { id: id(), beatId, createdAt: now(), source, content };
+  db.insert(beatRevisions).values(rev).run();
+  return rev;
+}
+
+export function listBeatRevisions(beatId: string, novelId: string) {
+  assertBeatInNovel(beatId, novelId);
+  return getDb()
+    .select()
+    .from(beatRevisions)
+    .where(eq(beatRevisions.beatId, beatId))
+    .orderBy(desc(beatRevisions.createdAt))
+    .all();
+}
+
+/** Restore a beat to a past revision (recorded as a new "restore" snapshot). */
+export function restoreBeatRevision(beatId: string, novelId: string, revisionId: string) {
+  const db = getDb();
+  const beat = assertBeatInNovel(beatId, novelId);
+  const rev = db
+    .select()
+    .from(beatRevisions)
+    .where(and(eq(beatRevisions.id, revisionId), eq(beatRevisions.beatId, beatId)))
+    .get();
+  if (!rev) throw new Error("Revision not found");
+  db.update(beats).set({ prose: rev.content }).where(eq(beats.id, beatId)).run();
+  saveBeatRevision(beatId, novelId, rev.content, "restore");
   syncChapterScene(beat.chapterId, novelId);
   touchNovel(novelId);
   return db.select().from(beats).where(eq(beats.id, beatId)).get()!;
