@@ -182,9 +182,23 @@ function BeatBlock({
 }) {
   const setActive = useEditorStore((s) => s.setActive);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const outlineRef = useRef<HTMLTextAreaElement>(null);
   const [outline, setOutline] = useState(beat.content ?? "");
   const [writing, setWriting] = useState(false);
   const [error, setError] = useState("");
+
+  // Grow the outline box to fit its text (no scrollbar); the flex row then
+  // takes the height of whichever side — prose or outline — is taller.
+  const autosize = useCallback(() => {
+    const el = outlineRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
+  useEffect(() => {
+    autosize();
+  }, [outline, autosize]);
 
   const initialContent = useMemo(() => {
     try {
@@ -213,7 +227,7 @@ function BeatBlock({
     ],
     content: initialContent,
     immediatelyRender: false,
-    editorProps: { attributes: { class: "manuscript min-h-[6rem]" } },
+    editorProps: { attributes: { class: "manuscript min-h-[8rem]" } },
     onUpdate: ({ editor: ed }) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => void persistProse(JSON.stringify(ed.getJSON())), 900);
@@ -308,10 +322,15 @@ function BeatBlock({
           </span>
         </div>
         <textarea
-          className="min-h-[5rem] w-full resize-y rounded-md border border-border bg-bg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent"
+          ref={outlineRef}
+          rows={4}
+          className="min-h-[8rem] w-full resize-none overflow-hidden rounded-md border border-border bg-bg px-2 py-1.5 text-sm leading-relaxed outline-none focus:ring-2 focus:ring-accent"
           placeholder="What happens in this beat…"
           value={outline}
-          onChange={(e) => setOutline(e.target.value)}
+          onChange={(e) => {
+            setOutline(e.target.value);
+            autosize();
+          }}
           onBlur={(e) => {
             if (e.target.value !== (beat.content ?? "")) void saveOutline(e.target.value);
           }}
