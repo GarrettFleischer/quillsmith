@@ -24,7 +24,7 @@ export function BeatHistoryModal({
   beatId: string;
   label: string;
   onClose: () => void;
-  onRestored: () => void;
+  onRestored: (content: string) => void;
 }) {
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [selected, setSelected] = useState(0);
@@ -75,7 +75,7 @@ export function BeatHistoryModal({
         body: JSON.stringify({ action: "restoreBeatRevision", payload: { beatId, revisionId: rev.id } }),
       });
       if (!res.ok) throw new Error("Restore failed");
-      onRestored();
+      onRestored(rev.content);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Restore failed");

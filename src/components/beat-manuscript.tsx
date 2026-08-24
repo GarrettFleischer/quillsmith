@@ -403,8 +403,15 @@ function BeatBlock({
           beatId={beat.id}
           label={`Beat ${index + 1}`}
           onClose={() => setShowHistory(false)}
-          onRestored={() => {
+          onRestored={(content) => {
             setShowHistory(false);
+            // Apply immediately so the editor updates on the first click,
+            // independent of the refetch/sync timing.
+            try {
+              editor?.commands.setContent(JSON.parse(content));
+            } catch {
+              /* ignore */
+            }
             onChange();
           }}
         />
