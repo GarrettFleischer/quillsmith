@@ -29,7 +29,6 @@ export default function SettingsPage() {
   const [compareBusy, setCompareBusy] = useState(false);
   const [densityJson, setDensityJson] = useState("");
   const [craftPipeline, setCraftPipeline] = useState(true);
-  const [needleTools, setNeedleTools] = useState(false);
   const [status, setStatus] = useState("");
 
   async function refresh() {
@@ -40,7 +39,6 @@ export default function SettingsPage() {
     setTasks(data.tasks ?? []);
     setDensityJson(data.settings?.densityThresholdsJson ?? "");
     setCraftPipeline(data.settings?.craftPipeline !== false);
-    setNeedleTools(data.settings?.needleTools === true);
     const edits: Record<string, { modelId: string; temperature: string }> = {};
     for (const t of data.tasks ?? []) {
       const ov = (data.taskOverrides ?? []).find((o: TaskOverride) => o.taskId === t.id);
@@ -140,42 +138,6 @@ export default function SettingsPage() {
             }}
           >
             Save pipeline
-          </button>
-        </section>
-
-        <section className="mt-8 rounded border border-border bg-surface p-4">
-          <h2 className="font-serif text-xl">Needle tool calling</h2>
-          <p className="mt-1 text-sm text-muted">
-            In Chapter chat, let the big model just describe the next action in plain language and
-            hand the actual tool call to the local Needle 2 model. This is steadier with small/free
-            models than asking them to emit function calls directly. Requires the Needle sidecar
-            (`python3 services/needle/server.py`).
-          </p>
-          <label className="mt-3 flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={needleTools}
-              onChange={(e) => setNeedleTools(e.target.checked)}
-            />
-            <span>Route Chapter-chat tool calls through Needle 2</span>
-          </label>
-          <button
-            type="button"
-            className="mt-3 rounded bg-accent px-3 py-1.5 text-sm text-bg"
-            onClick={async () => {
-              await fetch("/api/settings", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  action: "updateSettings",
-                  payload: { needleTools },
-                }),
-              });
-              setStatus("Needle setting saved");
-            }}
-          >
-            Save Needle setting
           </button>
         </section>
 

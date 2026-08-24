@@ -9,7 +9,6 @@ import {
   getChapterProse,
   getCommand,
   getNovelTree,
-  getSettings,
   listChapterChat,
   listKnowledge,
 } from "@/lib/novels";
@@ -17,7 +16,7 @@ import { runNeedleLoop } from "@/lib/needle-loop";
 import { actLabel, chapterLabel, findChapterPlace } from "@/lib/manuscript";
 import { compileTemplate } from "@/lib/prompt";
 import { buildCodex } from "@/lib/prompts/context";
-import { agentSseResponse, runAgentLoop, type ChatMessage } from "@/lib/openrouter";
+import { agentSseResponse, type ChatMessage } from "@/lib/openrouter";
 import { resolveTaskRuntime } from "@/lib/task-runtime";
 import { plainFromTipTap } from "@/lib/utils";
 
@@ -136,12 +135,11 @@ ${buildCodex(mentioned)}`;
       { role: "user", content: userBits },
     ];
 
-    const useNeedle = getSettings().needleTools === true;
-    const loop = useNeedle ? runNeedleLoop : runAgentLoop;
-
+    // Tool calling always goes through the local Needle model: the big model
+    // plans in plain language and Needle emits the concrete tool call.
     return agentSseResponse(async function* (signal) {
       let full = "";
-      for await (const event of loop({
+      for await (const event of runNeedleLoop({
         model,
         temperature,
         messages,

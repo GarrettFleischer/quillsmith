@@ -58,7 +58,9 @@ def _complete(tools: list[dict], text: str, system: str | None) -> dict:
     with _lock:
         agent = _agent_for(tools, system)
         agent.reset()  # each request is an independent single-turn description
-        resp = agent.complete(text)
+        # Raise the output budget so longer arguments (e.g. a 2-sentence
+        # chapter summary) aren't truncated ("token budget exhausted").
+        resp = agent.complete(text, max_new_tokens=1024)
     return {
         "type": resp.get("type"),
         "success": resp.get("success"),

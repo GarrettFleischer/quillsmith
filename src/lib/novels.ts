@@ -430,7 +430,6 @@ export function updateSettings(patch: Partial<{
   theme: string;
   densityThresholdsJson: string;
   craftPipeline: boolean;
-  needleTools: boolean;
 }>) {
   getDb().update(appSettings).set(patch).where(eq(appSettings.id, 1)).run();
   return getSettings();

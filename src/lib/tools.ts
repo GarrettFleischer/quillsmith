@@ -364,13 +364,11 @@ export const CHAPTER_CHAT_TOOLS: ToolDef[] = [
     type: "function",
     function: {
       name: "upsert_beat",
-      description: "Create or update one beat on the current chapter",
+      description: "Add one beat (a single story move) to the current chapter",
       parameters: {
         type: "object",
         properties: {
-          id: { type: "string" },
-          content: { type: "string" },
-          order: { type: "number" },
+          content: { type: "string", description: "one concise beat sentence" },
         },
         required: ["content"],
       },

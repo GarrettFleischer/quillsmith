@@ -6,7 +6,8 @@ import {
   listOverviewMessages,
 } from "@/lib/novels";
 import { systemPromptForTask, toolsForTask, AI_TASK_BY_ID } from "@/lib/ai-tasks";
-import { agentSseResponse, runAgentLoop, type ChatMessage } from "@/lib/openrouter";
+import { agentSseResponse, type ChatMessage } from "@/lib/openrouter";
+import { runNeedleLoop } from "@/lib/needle-loop";
 import { resolveTaskRuntime } from "@/lib/task-runtime";
 
 export const runtime = "nodejs";
@@ -75,7 +76,7 @@ Current mode preference: ${body.mode ?? "fill"}`;
 
     return agentSseResponse(async function* (signal) {
       let full = "";
-      for await (const event of runAgentLoop({
+      for await (const event of runNeedleLoop({
         model,
         temperature,
         messages,

@@ -2,11 +2,9 @@ import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { acts, beats, chapters, scenes } from "@/db/schema";
 import {
-  AI_TASK_BY_ID,
   commandKind,
   commandSlugToTask,
   systemPromptForTask,
-  toolsForTask,
 } from "@/lib/ai-tasks";
 import { CHECK_BY_ID, checkIdFromSlug } from "@/lib/checks";
 import { runLayerPipeline } from "@/lib/layer-runtime";
@@ -110,7 +108,6 @@ export async function POST(req: Request) {
     }
 
     const taskId = commandSlugToTask(body.commandSlug);
-    const task = taskId ? AI_TASK_BY_ID[taskId] : null;
     const kind = commandKind(body.commandSlug);
     const checkId = checkIdFromSlug(body.commandSlug);
     const checkMode = body.checkMode ?? (kind === "check" ? "plan" : undefined);
@@ -132,7 +129,6 @@ export async function POST(req: Request) {
 
     const override = getCommandOverride(command.id, runtime.model);
     const temperature = override?.temperature ?? runtime.temperature;
-    const enableTools = command.enableTools !== "false" && kind !== "check";
     const model = runtime.model;
 
     const db = getDb();
@@ -299,8 +295,6 @@ export async function POST(req: Request) {
         ? CHECK_APPLY_TEMPLATE
         : override?.promptTemplate || command.promptTemplate;
 
-    const tools = task ? toolsForTask(task) : enableTools ? toolsForTask(AI_TASK_BY_ID.prose_expand) : undefined;
-
     return agentSseResponse(async function* (signal) {
       let kb: Array<{
         id: string;
@@ -421,11 +415,14 @@ export async function POST(req: Request) {
         return;
       }
 
+      // No native tool-calling: prose is written straight from the in-context
+      // codex/story-so-far the craft context already injects. Agentic tool use
+      // (chat, overview) goes through the local Needle model instead.
       yield* runAgentLoop({
         model,
         temperature,
         messages,
-        tools: enableTools ? tools : undefined,
+        tools: undefined,
         novelId: body.novelId,
         signal,
       });
