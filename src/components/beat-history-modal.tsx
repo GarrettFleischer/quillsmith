@@ -164,7 +164,15 @@ export function BeatHistoryModal({
                     Original
                   </div>
                   <p className="manuscript min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 text-base leading-relaxed">
-                    {hunks.map((h) => h.original).join("")}
+                    {hunks.map((h) =>
+                      h.type === "equal" ? (
+                        <span key={h.id}>{h.original}</span>
+                      ) : h.type === "insert" ? null : (
+                        <span key={h.id} className="rounded bg-danger/15 text-danger">
+                          {h.original}
+                        </span>
+                      ),
+                    )}
                   </p>
                 </div>
                 <div className="flex min-h-0 flex-col overflow-hidden">
