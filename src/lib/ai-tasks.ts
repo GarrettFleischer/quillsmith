@@ -307,7 +307,7 @@ export const AI_TASKS: AiTaskDef[] = [
   {
     id: "analyze_style",
     label: "Analyze style",
-    description: "Extract a living style guide from samples",
+    description: "Extract an author voice guide from three fiction samples",
     outputMode: "structured_json",
     defaultModel: PROSE_DEFAULT,
     temperature: 0.35,

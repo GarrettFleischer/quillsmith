@@ -29,6 +29,8 @@ import {
 import { scrubUserMessage } from "@/lib/prompts/scrubbers";
 import { resolveTaskRuntime } from "@/lib/task-runtime";
 import { plainFromTipTap } from "@/lib/utils";
+import { appendStyleGuide, shouldAttachStyleGuide } from "@/lib/prompts/style-guide";
+import { resolveWritingStyleGuide } from "@/lib/writing-style";
 
 export const runtime = "nodejs";
 
@@ -105,12 +107,15 @@ export async function POST(req: Request) {
     const tellId = tellIdFromScrubTask(taskId);
     const checkId = checkIdFromTask(taskId);
     const checkMode = body.checkMode ?? (checkId ? "plan" : undefined);
-    const system = systemPromptForTask(taskId, {
+    let system = systemPromptForTask(taskId, {
       scrubMode: body.scrubMode ?? "identify",
       tellId: tellId ?? undefined,
       checkId: checkId ?? undefined,
       checkMode,
     });
+    if (shouldAttachStyleGuide(taskId, { scrubMode: body.scrubMode, checkMode })) {
+      system = appendStyleGuide(system, resolveWritingStyleGuide(tree.novel.styleGuideJson));
+    }
 
     const answers = listOverviewAnswers(body.novelId);
     const placement = [

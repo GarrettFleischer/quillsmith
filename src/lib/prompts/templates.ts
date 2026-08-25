@@ -66,7 +66,13 @@ Mention-relevant knowledge excerpts:
 Continue from the end of the current chapter. Cover only the beats/instructions above. Prefer stopping early over padding.`;
 
 /** User message for rewrite: the chapter text to condense. Length target lives in the system prompt. */
-export const REWRITE_TEMPLATE = `{{currentChapter}}`;
+export const REWRITE_TEMPLATE = `{{styleGuide}}
+
+Condense the current chapter while matching the author voice above.
+
+<currentChapter>
+{{currentChapter}}
+</currentChapter>`;
 
 export const DENSITY_TEMPLATE = `Count AI-tell pattern density in this chapter. Return JSON hits only.
 

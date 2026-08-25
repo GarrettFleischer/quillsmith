@@ -169,6 +169,8 @@ export const appSettings = sqliteTable("app_settings", {
   theme: text("theme").default("system"),
   densityThresholdsJson: text("density_thresholds_json").default(""),
   craftPipeline: integer("craft_pipeline", { mode: "boolean" }).notNull().default(true),
+  authorStyleSamplesJson: text("author_style_samples_json").default("[]"),
+  authorStyleGuideJson: text("author_style_guide_json").default(""),
 });
 
 export const taskModelOverrides = sqliteTable("task_model_overrides", {

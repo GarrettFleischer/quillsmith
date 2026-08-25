@@ -28,7 +28,7 @@ Three mechanisms together, not one gimmick:
 - **Home** (`/`) — Create and open novels. A new novel starts with Act 1 / Chapter 1 on the Write desk.
 - **Write** (`/novel/[id]`) — Chapter-first desk: Codex | Actions on the left; one chapter editor in the center; collapsible Beats, Summary, and chapter Chat on the right. Highlight **Send to chat**; Action chips attach saved prompts.
 - **Review** (`/novel/[id]/review`) — Autocrit-shaped sibling tab: chapter or book stats (pattern density) and generated check suggestions. Not a panel inside Write.
-- **Settings** (`/settings`) — OpenRouter API key, default model, per-task model routing, model compare, density thresholds, drafting pipeline. Saved Actions are edited in Write → Actions, not here.
+- **Settings** (`/settings`) — OpenRouter API key, author voice (three-sample style guide), default model, per-task model routing, model compare, density thresholds, drafting pipeline. Saved Actions are edited in Write → Actions, not here.
 - **Design lab** (`/design/lab`) — Internal aesthetic exploration surface for the Ink Ledger direction.
 
 `/novel/[id]/overview` redirects to Write. The Overview wizard is retired.
@@ -47,7 +47,7 @@ Data persists in `data/quillsmith.db` (gitignored). Dev server: `bun run dev` at
 - Saved Actions (prompt templates with variable inserter: `mentionedCodex`, `selection`, chapter fields) invoked as chat chips, not inline slash menus.
 - Per-task model routing and a small model-compare tool (BYOK).
 - Chapter summaries and beats as structured AI context (story-so-far instead of dumping the manuscript).
-- Per-novel living style guide (author-approved rules injected into drafting).
+- Author voice: Settings takes three fiction samples (action, dialogue, quiet/interior), extracts a style guide, and injects the approved guide into writing prompts (Expand, Rewrite, Layer, checks, chapter chat). Codex Story can add a book-specific overlay.
 - Review: pattern-density counts and check suggestions against the current chapter or whole book. Not an “AI score.”
 - Optional multi-model layering is the Expand path (brief → dialogue → connective prose → climax polish), then plan-then-apply checks on the new prose. Turn the pipeline off in Settings for a single-shot expand.
 - Comparison-book analysis as genre grammar — not a plot to copy.
@@ -67,12 +67,12 @@ Data persists in `data/quillsmith.db` (gitignored). Dev server: `bun run dev` at
 - *Review* — Separate Autocrit-style mode for density stats and check suggestions.
 - *Codex* — Per-novel story bible (characters, lore, locations, items, other) plus a Story item for premise and style.
 - *Actions* — Saved prompt templates (formerly slash commands) edited in Write → Actions as draggable sheets and attached as chat chips.
-- *Settings* — Global settings route for API key, models, and pipeline. Header control is Settings.
+- *Settings* — Global settings route for API key, author voice, models, and pipeline. Header control is Settings.
 - *Checks* — Narrow improvement plans (adverbs, tags, logic, contrast crutches). Expand can apply them to new prose automatically.
 - *Narrative physics* — Numbered chapter/character sliders injected into drafting. Expand proposes them when a chapter has none.
 - *Layering* — Multi-model chapter pipeline used by Expand, not only an Action slug.
 - *Drafting pipeline* — Settings toggle. On: Expand curates context, sets sliders, layers models, then checks. Off: single-shot expand.
-- *Style guide* — Author-edited voice rules, approved before they affect Expand.
+- *Style guide* — Author-edited voice rules extracted from three writing samples in Settings, approved before they affect writing prompts. Codex Story can add a book overlay.
 - *Chapter summaries* — Short rollups (what happens, who is in the chapter, promises) used as distant context.
 - *AI tell scrubbers* — Single-pattern cleanup detectors (metaphor stacking, brochure language, etc.).
 - *Pattern density* — Counts of those tells in a passage. Occasional craft techniques are fine; stacked repetition is the warning. Not detector software and not a “human %.”

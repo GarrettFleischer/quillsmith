@@ -1,6 +1,9 @@
 import { AI_TASK_BY_ID, isAiTaskId, systemPromptForTask, type AiTaskId } from "@/lib/ai-tasks";
 import { collectAgentText, runAgentLoop, type ChatMessage } from "@/lib/openrouter";
+import { getNovel } from "@/lib/novels";
+import { appendStyleGuide, shouldAttachStyleGuide } from "@/lib/prompts/style-guide";
 import { resolveTaskRuntime } from "@/lib/task-runtime";
+import { resolveWritingStyleGuide } from "@/lib/writing-style";
 
 export const runtime = "nodejs";
 
@@ -22,7 +25,13 @@ export async function POST(req: Request) {
     const taskId: AiTaskId =
       body.task && isAiTaskId(body.task) ? body.task : "compare_models";
     const def = AI_TASK_BY_ID[taskId];
-    const system = systemPromptForTask(taskId);
+    let system = systemPromptForTask(taskId);
+    if (shouldAttachStyleGuide(taskId)) {
+      system = appendStyleGuide(
+        system,
+        resolveWritingStyleGuide(getNovel(body.novelId)?.styleGuideJson),
+      );
+    }
     const runtime = resolveTaskRuntime(taskId);
 
     const results = [];

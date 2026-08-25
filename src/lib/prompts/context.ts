@@ -241,46 +241,14 @@ export function buildChapterContext(
   return `Chapter summary:\n${sum}\n\nBeats:\n${beatLines || "(none)"}`;
 }
 
-export type StyleGuide = {
-  approved?: boolean;
-  sentenceLength?: string;
-  formality?: string;
-  humor?: string;
-  lean?: string;
-  favoredPhrases?: string[];
-  bannedPhrases?: string[];
-  rules?: string[];
-};
-
-export function parseStyleGuide(json?: string | null): StyleGuide | null {
-  if (!json?.trim()) return null;
-  try {
-    return JSON.parse(json) as StyleGuide;
-  } catch {
-    return null;
-  }
-}
-
-export function buildStyleGuideBlock(json?: string | null): string {
-  const guide = parseStyleGuide(json);
-  if (!guide?.approved) return "";
-  const lines = ["Author style guide (follow this persona before typing):"];
-  if (guide.sentenceLength) lines.push(`Sentence length: ${guide.sentenceLength}`);
-  if (guide.formality) lines.push(`Formality: ${guide.formality}`);
-  if (guide.humor) lines.push(`Humor: ${guide.humor}`);
-  if (guide.lean) lines.push(`Lean: ${guide.lean}`);
-  if (guide.favoredPhrases?.length) {
-    lines.push(`Favored phrases: ${guide.favoredPhrases.join("; ")}`);
-  }
-  if (guide.bannedPhrases?.length) {
-    lines.push(`Avoid: ${guide.bannedPhrases.join("; ")}`);
-  }
-  if (guide.rules?.length) {
-    lines.push("Rules:");
-    for (const r of guide.rules) lines.push(`- ${r}`);
-  }
-  return lines.join("\n");
-}
+export type { StyleGuide, StyleSample, StyleSampleKind } from "@/lib/prompts/style-guide";
+export {
+  parseStyleGuide,
+  buildStyleGuideBlock,
+  coerceStyleGuide,
+  formatStyleGuideBlock,
+  mergeStyleGuides,
+} from "@/lib/prompts/style-guide";
 
 export function buildSlidersBlock(opts: {
   sceneSlidersJson?: string | null;

@@ -1,5 +1,8 @@
 import { systemPromptForTask, type AiTaskId } from "@/lib/ai-tasks";
+import { getNovel } from "@/lib/novels";
 import { PIPELINE_CONTINUE_NOTE } from "@/lib/prompts/pipeline";
+import { appendStyleGuide } from "@/lib/prompts/style-guide";
+import { resolveWritingStyleGuide } from "@/lib/writing-style";
 import {
   collectAgentText,
   runAgentLoop,
@@ -26,6 +29,7 @@ export async function* runLayerPipeline(opts: {
 }): AsyncIterable<AgentEvent> {
   const streamFinal = opts.streamFinal !== false;
   const continueNote = opts.continuation ? `\n\n${PIPELINE_CONTINUE_NOTE}` : "";
+  const styleGuide = resolveWritingStyleGuide(getNovel(opts.novelId)?.styleGuideJson);
   let prior = "";
   for (let i = 0; i < LAYER_STEPS.length; i++) {
     if (opts.signal.aborted) return;
@@ -34,7 +38,7 @@ export async function* runLayerPipeline(opts: {
     yield { type: "status", message: `Layer ${i + 1}/${LAYER_STEPS.length}: ${step.label}` };
     const runtime = resolveTaskRuntime(step.taskId, opts.modelOverride);
     const messages: ChatMessage[] = [
-      { role: "system", content: systemPromptForTask(step.taskId) },
+      { role: "system", content: appendStyleGuide(systemPromptForTask(step.taskId), styleGuide) },
       {
         role: "user",
         content: `${opts.contextBlock}${continueNote}
