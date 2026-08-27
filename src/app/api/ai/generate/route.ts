@@ -33,11 +33,12 @@ import {
   buildSceneInstructions,
   buildSlidersBlock,
   buildStorySoFar,
-  buildStyleGuideBlock,
   buildVoiceAnchor,
   sceneMatchText,
 } from "@/lib/prompts/context";
 import { CHECK_APPLY_TEMPLATE, EXPAND_TEMPLATE } from "@/lib/prompts/templates";
+import { appendStyleGuide } from "@/lib/prompts/style-guide";
+import { resolveWritingStyleGuide } from "@/lib/writing-style";
 import {
   curateSceneEntries,
   proposeScenePhysics,
@@ -217,7 +218,7 @@ export async function POST(req: Request) {
             ? `Condense the current chapter to about ${wordTarget} words:`
             : `Condense the current chapter:`;
 
-    const styleGuide = buildStyleGuideBlock(tree.novel.styleGuideJson);
+    const styleGuide = resolveWritingStyleGuide(tree.novel.styleGuideJson);
 
     const buildBag = (
       kb: Array<{
@@ -371,8 +372,15 @@ export async function POST(req: Request) {
       if (kind === "rewrite") {
         systemPrompt = compileTemplate(systemPrompt, { lengthInstructions });
       }
-      if (styleGuide && kind === "expand") {
-        systemPrompt = `${systemPrompt}\n\n${styleGuide}`;
+      if (
+        styleGuide &&
+        (kind === "expand" ||
+          kind === "rewrite" ||
+          kind === "layer" ||
+          checkMode === "apply" ||
+          body.scrubMode === "rewrite")
+      ) {
+        systemPrompt = appendStyleGuide(systemPrompt, styleGuide);
       }
 
       const messages: ChatMessage[] = [

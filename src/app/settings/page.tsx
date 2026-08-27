@@ -2,6 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { AppHeader } from "@/components/app-header";
+import { AuthorVoiceSettings } from "@/components/author-voice-settings";
+import {
+  emptyStyleGuide,
+  emptyStyleSamples,
+  parseStyleGuide,
+  parseStyleSamples,
+  type StyleGuide,
+  type StyleSample,
+} from "@/lib/prompts/style-guide";
 
 type TaskRow = {
   id: string;
@@ -29,6 +38,8 @@ export default function SettingsPage() {
   const [compareBusy, setCompareBusy] = useState(false);
   const [densityJson, setDensityJson] = useState("");
   const [craftPipeline, setCraftPipeline] = useState(true);
+  const [voiceSamples, setVoiceSamples] = useState<StyleSample[]>(emptyStyleSamples);
+  const [voiceGuide, setVoiceGuide] = useState<StyleGuide>(emptyStyleGuide);
   const [status, setStatus] = useState("");
 
   async function refresh() {
@@ -39,6 +50,8 @@ export default function SettingsPage() {
     setTasks(data.tasks ?? []);
     setDensityJson(data.settings?.densityThresholdsJson ?? "");
     setCraftPipeline(data.settings?.craftPipeline !== false);
+    setVoiceSamples(parseStyleSamples(data.settings?.authorStyleSamplesJson));
+    setVoiceGuide(parseStyleGuide(data.settings?.authorStyleGuideJson) ?? emptyStyleGuide());
     const edits: Record<string, { modelId: string; temperature: string }> = {};
     for (const t of data.tasks ?? []) {
       const ov = (data.taskOverrides ?? []).find((o: TaskOverride) => o.taskId === t.id);
@@ -72,7 +85,8 @@ export default function SettingsPage() {
       <main className="mx-auto max-w-3xl px-4 py-10">
         <h1 className="font-display text-4xl">Settings</h1>
         <p className="mt-2 text-muted">
-          OpenRouter, models, and drafting pipeline. Chapter Actions live in Write → Actions.
+          OpenRouter, author voice, models, and drafting pipeline. Chapter Actions live in Write
+          → Actions.
         </p>
 
         <section className="mt-8 space-y-3 rounded border border-border bg-surface p-4">
@@ -97,13 +111,20 @@ export default function SettingsPage() {
           </label>
           <button
             type="button"
-            className="rounded bg-accent px-3 py-2 text-sm text-bg"
+            className="cursor-pointer rounded bg-accent px-3 py-2 text-sm text-bg"
             onClick={() => void saveSettings()}
           >
             Save
           </button>
           {status ? <p className="text-sm text-accent">{status}</p> : null}
         </section>
+
+        <AuthorVoiceSettings
+          samples={voiceSamples}
+          onSamplesChange={setVoiceSamples}
+          guide={voiceGuide}
+          onGuideChange={setVoiceGuide}
+        />
 
         <section className="mt-8 rounded border border-border bg-surface p-4">
           <h2 className="font-serif text-xl">Drafting pipeline</h2>
@@ -124,7 +145,7 @@ export default function SettingsPage() {
           </label>
           <button
             type="button"
-            className="mt-3 rounded bg-accent px-3 py-1.5 text-sm text-bg"
+            className="mt-3 cursor-pointer rounded bg-accent px-3 py-1.5 text-sm text-bg"
             onClick={async () => {
               await fetch("/api/settings", {
                 method: "PATCH",
@@ -202,7 +223,7 @@ export default function SettingsPage() {
           </div>
           <button
             type="button"
-            className="mt-3 rounded bg-accent px-3 py-1.5 text-sm text-bg"
+            className="mt-3 cursor-pointer rounded bg-accent px-3 py-1.5 text-sm text-bg"
             onClick={async () => {
               for (const t of tasks) {
                 const edit = taskEdits[t.id];
@@ -249,7 +270,7 @@ export default function SettingsPage() {
           <button
             type="button"
             disabled={compareBusy}
-            className="mt-2 rounded bg-accent px-3 py-1.5 text-sm text-bg disabled:opacity-50"
+            className="mt-2 cursor-pointer rounded bg-accent px-3 py-1.5 text-sm text-bg disabled:cursor-not-allowed disabled:opacity-50"
             onClick={async () => {
               setCompareBusy(true);
               setCompareResults([]);
@@ -302,7 +323,7 @@ export default function SettingsPage() {
           />
           <button
             type="button"
-            className="mt-2 rounded border border-border px-3 py-1.5 text-sm"
+            className="mt-2 cursor-pointer rounded border border-border px-3 py-1.5 text-sm"
             onClick={async () => {
               await fetch("/api/settings", {
                 method: "PATCH",

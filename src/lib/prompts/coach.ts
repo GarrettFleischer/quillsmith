@@ -87,22 +87,33 @@ For each option include:
 
 Do not apply changes. The author chooses. Keep options distinct, not three paraphrases.`;
 
-export const ANALYZE_STYLE_PROMPT = `You extract a living style guide from sample passages the author wrote.
+export const ANALYZE_STYLE_PROMPT = `You are a forensic editor extracting a Voice Fingerprint from one fiction author's own prose.
 
-One job: document their voice as editable rules. Do not rewrite the samples. Do not invent a generic "literary" voice.
+One job: identify architectural pattern. Do not evaluate quality. Do not rewrite the samples. Do not invent a generic "literary" or "bestselling" voice. If a dimension is absent from the samples, say so — do not fill it with workshop advice.
 
-Return JSON only:
+The author supplied three kinds of finished fiction (action/pressure, dialogue-heavy, quiet/interior). Use all three. A style guide built from one register is too thin.
+
+Return JSON only (no markdown fences):
 {
-  "sentenceLength": "short observation",
-  "formality": "casual | mixed | formal — with a note",
-  "humor": "how often / what kind",
-  "favoredPhrases": ["..."],
-  "bannedPhrases": ["phrases they avoid or that would sound unlike them"],
-  "lean": "stories vs explanation vs dialogue",
-  "rules": ["imperative rules the model should follow when drafting for this author"]
+  "sentenceRhythm": "Length, variation, fragments, where sentences typically stop vs extend. Name the pattern, not a vibe word like lyrical or gritty.",
+  "vocabulary": "Register, recurring word choices, conspicuously absent diction.",
+  "purpleProse": "How ornate is description — lean/concrete, mixed, or lush? When does imagery earn its place vs stall the scene? Be specific to THESE samples.",
+  "povDistance": "How close is the narrator to the viewpoint character? In-head, over-the-shoulder, occasional pull-back?",
+  "dialogue": "Talk-to-prose ratio, tags vs action beats, full sentences vs fragments, subtext habits.",
+  "humor": "Frequency and kind — dry, banter, none visible in these samples, etc.",
+  "description": "Concrete sensory vs impressionistic; whether description also reveals character or builds tension.",
+  "pacing": "Paragraph breaks, white space, scene-entry and scene-exit habits, momentum vs pause.",
+  "emotionalRegister": "Shown through body/action, understatement, interior statement, or named feeling?",
+  "signatureQuirks": ["recurring structural or punctuation moves that feel like this author, not a default"],
+  "doThis": ["imperative instructions a later model must follow"],
+  "dontDo": ["imperative bans grounded in what these samples avoid — including AI-default habits that would not sound like this author"],
+  "rules": ["additional imperative rules for drafting in this voice"],
+  "exampleAnchor": "150-300 words copied from the samples (the most characteristic stretch). Do not invent an example.",
+  "favoredPhrases": ["short phrases that actually appear"],
+  "bannedPhrases": ["phrases that would sound unlike them"]
 }
 
-Be specific to these samples. The author will edit before this guide is used.`;
+Write doThis, dontDo, and rules as instructions ("Prefer action beats over said-bookisms"), not observations ("The author often uses action beats"). Be concrete enough that someone who had never read this author could write a passage and the influence would be recognizable.`;
 
 export const SUMMARIZE_CHAPTER_PROMPT = `You write a compact chapter summary-plus for later AI context. Signpost so a later model can find facts fast.
 

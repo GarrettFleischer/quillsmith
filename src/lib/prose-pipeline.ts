@@ -9,7 +9,10 @@ import {
   type ChatMessage,
 } from "@/lib/openrouter";
 import { checkApplySystem, checkPlanSystem } from "@/lib/prompts/checks";
+import { appendStyleGuide } from "@/lib/prompts/style-guide";
 import { resolveTaskRuntime } from "@/lib/task-runtime";
+import { resolveWritingStyleGuide } from "@/lib/writing-style";
+import { getNovel } from "@/lib/novels";
 
 export type KnowledgeLite = {
   id: string;
@@ -169,12 +172,13 @@ export async function* runCheckSeries(opts: {
       message: `Check: ${check.label} — applying ${plan.items.length} item(s)`,
     };
     const runtime = resolveTaskRuntime("check_apply");
+    const styleGuide = resolveWritingStyleGuide(getNovel(opts.novelId)?.styleGuideJson);
     const applied = await collectAgentText(
       runAgentLoop({
         model: runtime.model,
         temperature: runtime.temperature,
         messages: [
-          { role: "system", content: checkApplySystem() },
+          { role: "system", content: appendStyleGuide(checkApplySystem(), styleGuide) },
           {
             role: "user",
             content: `Apply this improvement plan. Change nothing else.\n\n<plan>\n${JSON.stringify(plan)}\n</plan>\n\n<passage>\n${text}\n</passage>`,

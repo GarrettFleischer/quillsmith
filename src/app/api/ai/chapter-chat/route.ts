@@ -15,9 +15,11 @@ import {
 import { actLabel, chapterLabel, findChapterPlace } from "@/lib/manuscript";
 import { compileTemplate } from "@/lib/prompt";
 import { buildCodex } from "@/lib/prompts/context";
+import { appendStyleGuide } from "@/lib/prompts/style-guide";
 import { agentSseResponse, runAgentLoop, type ChatMessage } from "@/lib/openrouter";
 import { resolveTaskRuntime } from "@/lib/task-runtime";
 import { plainFromTipTap } from "@/lib/utils";
+import { resolveWritingStyleGuide } from "@/lib/writing-style";
 
 export const runtime = "nodejs";
 
@@ -85,6 +87,7 @@ export async function POST(req: Request) {
     const actTitle = place ? actLabel(place.actIndex, place.act.title) : act.title;
     const chapterTitle = place ? chapterLabel(place.chapterIndex, place.chapter.title) : chapter.title;
     const command = body.actionSlug ? getCommand(body.actionSlug) : null;
+    const styleGuide = resolveWritingStyleGuide(tree.novel.styleGuideJson);
     const compiledAction = command
       ? compileTemplate(command.promptTemplate, {
           userInstruction: body.message,
@@ -100,10 +103,12 @@ export async function POST(req: Request) {
           knowledge: mentioned.map((e) => `- ${e.name} (${e.type}): ${e.summary}`).join("\n"),
           actTitle,
           novelPremise: tree.novel.premise ?? "",
+          styleGuide,
         })
       : "";
 
-    const system = `${systemPromptForTask("chapter_chat")}
+    const system = appendStyleGuide(
+      `${systemPromptForTask("chapter_chat")}
 
 Current chapter: ${actTitle} / ${chapterTitle}
 Goal: ${chapter.goal || "(none)"}
@@ -112,7 +117,9 @@ ${chapter.summary || "(empty)"}
 Beats:
 ${chapterBeats.map((b, i) => `${i + 1}. ${b.content}`).join("\n") || "(none)"}
 Mentioned Codex:
-${buildCodex(mentioned)}`;
+${buildCodex(mentioned)}`,
+      styleGuide,
+    );
 
     const userBits = [
       body.selection?.trim() ? `[Selection attached, ${body.selection.trim().length} chars]` : "",
