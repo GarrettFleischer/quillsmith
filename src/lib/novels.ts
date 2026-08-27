@@ -139,7 +139,7 @@ function assertKnowledgeInNovel(entryId: string, novelId: string) {
 export function upsertAct(input: {
   id?: string;
   novelId: string;
-  title: string;
+  title?: string;
   order?: number;
   brief?: string;
   introduces?: string;
@@ -152,7 +152,8 @@ export function upsertAct(input: {
   const db = getDb();
   if (input.id) {
     assertActInNovel(input.id, input.novelId);
-    const patch: Record<string, unknown> = { title: input.title };
+    const patch: Record<string, unknown> = {};
+    if (input.title !== undefined) patch.title = input.title;
     if (input.brief !== undefined) patch.brief = input.brief;
     if (input.introduces !== undefined) patch.introduces = input.introduces;
     if (input.accomplishes !== undefined) patch.accomplishes = input.accomplishes;
@@ -164,8 +165,10 @@ export function upsertAct(input: {
       patch.summaryUpdatedAt = now();
     }
     if (input.order != null) patch.order = input.order;
-    db.update(acts).set(patch).where(eq(acts.id, input.id)).run();
-    touchNovel(input.novelId);
+    if (Object.keys(patch).length > 0) {
+      db.update(acts).set(patch).where(eq(acts.id, input.id)).run();
+      touchNovel(input.novelId);
+    }
     return db.select().from(acts).where(eq(acts.id, input.id)).get()!;
   }
   const max = db
@@ -180,7 +183,7 @@ export function upsertAct(input: {
       id: actId,
       novelId: input.novelId,
       order: input.order ?? max + 1,
-      title: input.title,
+      title: input.title ?? "",
       brief: input.brief ?? "",
       introduces: input.introduces ?? "",
       accomplishes: input.accomplishes ?? "",
@@ -202,7 +205,7 @@ export function upsertChapter(input: {
   id?: string;
   actId?: string;
   novelId: string;
-  title: string;
+  title?: string;
   order?: number;
   goal?: string;
   summary?: string;
@@ -210,15 +213,18 @@ export function upsertChapter(input: {
   const db = getDb();
   if (input.id) {
     assertChapterInNovel(input.id, input.novelId);
-    const patch: Record<string, unknown> = { title: input.title };
+    const patch: Record<string, unknown> = {};
+    if (input.title !== undefined) patch.title = input.title;
     if (input.goal !== undefined) patch.goal = input.goal;
     if (input.summary !== undefined) {
       patch.summary = input.summary;
       patch.summaryUpdatedAt = now();
     }
     if (input.order != null) patch.order = input.order;
-    db.update(chapters).set(patch).where(eq(chapters.id, input.id)).run();
-    touchNovel(input.novelId);
+    if (Object.keys(patch).length > 0) {
+      db.update(chapters).set(patch).where(eq(chapters.id, input.id)).run();
+      touchNovel(input.novelId);
+    }
     return db.select().from(chapters).where(eq(chapters.id, input.id)).get()!;
   }
   if (!input.actId) throw new Error("actId required to create a chapter");
@@ -235,7 +241,7 @@ export function upsertChapter(input: {
       id: chapterId,
       actId: input.actId,
       order: input.order ?? max + 1,
-      title: input.title,
+      title: input.title ?? "",
       goal: input.goal ?? "",
     })
     .run();

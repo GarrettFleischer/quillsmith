@@ -20,12 +20,15 @@ type ChatMessage = {
   metaJson?: string | null;
 };
 
+const PINNED_ACTIONS = ["expand", "rewrite", "layer"];
+
 export function ChapterChat({
   novelId,
   chapterId,
   proseId,
   commands,
   model,
+  onModelChange,
   hasApiKey,
   onChange,
   onDraft,
@@ -37,6 +40,7 @@ export function ChapterChat({
   proseId: string | null;
   commands: Command[];
   model: string;
+  onModelChange: (model: string) => void;
   hasApiKey: boolean;
   onChange: () => void;
   onDraft: (draft: DraftResult) => void;
@@ -63,6 +67,14 @@ export function ChapterChat({
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const action = commands.find((c) => c.slug === actionSlug) ?? null;
+  const actionChoices = [...commands].sort((a, b) => {
+    const ai = PINNED_ACTIONS.indexOf(a.slug);
+    const bi = PINNED_ACTIONS.indexOf(b.slug);
+    if (ai === -1 && bi === -1) return 0;
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
 
   async function load() {
     if (!chapterId) return;
@@ -220,15 +232,19 @@ export function ChapterChat({
             </button>
           ) : null}
         </div>
-        <p className="mt-1 text-xs text-muted">Summary, beats, and Codex for this chapter.</p>
+        <p className="mt-1 text-xs text-muted">Ask, expand, or rewrite this chapter.</p>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3 text-sm">
         {messages.length === 0 ? (
-          <p className="text-muted">Ask for a summary, extract beats, or attach a saved Action.</p>
+          <p className="text-muted">
+            {hasApiKey
+              ? "Ask about this chapter, or attach Expand to continue the draft."
+              : "Add an OpenRouter key in Settings to use chat and Actions."}
+          </p>
         ) : null}
         {messages.map((m) => (
           <div key={m.id} className={m.role === "user" ? "text-text" : "text-muted"}>
-            <p className="text-[10px] uppercase tracking-wide text-muted">
+            <p className="text-xs uppercase tracking-wide text-muted">
               {m.role === "user" ? "You" : "Assistant"}
             </p>
             <p className="mt-1 whitespace-pre-wrap">{m.content}</p>
@@ -244,43 +260,41 @@ export function ChapterChat({
       ) : null}
       {error ? <p className="px-3 text-xs text-danger">{error}</p> : null}
       <div className="border-t border-border p-3">
-        <div className="mb-2 flex flex-wrap gap-1">
-          {commands.slice(0, 8).map((c) => (
-            <button
-              key={c.slug}
-              type="button"
-              className={`rounded-md border px-1.5 py-0.5 text-[11px] ${
-                actionSlug === c.slug
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-muted hover:text-text"
-              }`}
-              onClick={() => {
-                if (actionSlug === c.slug) clearAction();
-                else setActionSlug(c.slug);
-              }}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <div className="mb-2 flex flex-wrap gap-1">
+        <div className="mb-2 flex flex-wrap items-center gap-1">
+          <label className="sr-only" htmlFor="chapter-action">
+            Action
+          </label>
+          <select
+            id="chapter-action"
+            className="max-w-full rounded-md border border-border bg-bg px-1.5 py-1 text-xs text-muted"
+            value={actionSlug ?? ""}
+            disabled={!hasApiKey || busy}
+            onChange={(e) => setActionSlug(e.target.value || null)}
+          >
+            <option value="">No action</option>
+            {actionChoices.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.label}
+              </option>
+            ))}
+          </select>
           {selection ? (
             <button
               type="button"
-              className="rounded-md border border-border bg-bg px-1.5 py-0.5 text-[11px]"
+              className="rounded-md border border-border bg-bg px-1.5 py-0.5 text-xs"
               title={selection}
               onClick={clearSelection}
             >
-              Selection · {Math.min(selection.length, 999)}c ×
+              Selection {Math.min(selection.length, 999)}c ×
             </button>
           ) : null}
           {action ? (
             <button
               type="button"
-              className="rounded-md border border-accent bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent"
+              className="rounded-md border border-accent bg-accent-soft px-1.5 py-0.5 text-xs text-accent"
               onClick={() => editAction(action.slug)}
             >
-              {action.label}
+              Edit {action.label}
             </button>
           ) : null}
         </div>
@@ -298,7 +312,7 @@ export function ChapterChat({
             }
           }}
         />
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex items-center gap-2">
           {busy ? (
             <button
               type="button"
@@ -319,6 +333,17 @@ export function ChapterChat({
               Send
             </button>
           )}
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">Model</span>
+            <input
+              className="w-full rounded border border-border bg-bg px-1.5 py-1 font-mono text-xs text-muted disabled:opacity-50"
+              value={model}
+              disabled={!hasApiKey}
+              onChange={(e) => onModelChange(e.target.value)}
+              spellCheck={false}
+              aria-label="Model"
+            />
+          </label>
         </div>
       </div>
     </aside>

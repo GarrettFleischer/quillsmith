@@ -8,6 +8,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { useEditorStore } from "@/store/editor";
 import { useWorkspaceStore } from "@/store/workspace";
 import { applyHunkDecisions, buildRewriteHunks, type DiffHunk } from "@/lib/diff";
+import { wordCount } from "@/lib/codex-ui";
 import { tipTapFromPlain, plainFromTipTap } from "@/lib/utils";
 
 export type DraftResult = {
@@ -26,6 +27,7 @@ export function ChapterEditor({
   draftResult,
   onDraftHandled,
   onSaved,
+  onMeta,
 }: {
   novelId: string;
   proseId: string;
@@ -36,11 +38,13 @@ export function ChapterEditor({
   draftResult?: DraftResult | null;
   onDraftHandled?: () => void;
   onSaved: () => void;
+  onMeta?: (meta: { words: number; saveLabel: string }) => void;
 }) {
   const setActive = useEditorStore((s) => s.setActive);
   const setStatus = useEditorStore((s) => s.setStatus);
   const sendSelectionToChat = useWorkspaceStore((s) => s.sendSelectionToChat);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onMetaRef = useRef(onMeta);
   const [error, setError] = useState("");
   const [hunks, setHunks] = useState<DiffHunk[] | null>(null);
   const [preRewrite, setPreRewrite] = useState("");
@@ -57,8 +61,13 @@ export function ChapterEditor({
     }
   }, [initialContent]);
 
+  useEffect(() => {
+    onMetaRef.current = onMeta;
+  }, [onMeta]);
+
   const persist = useCallback(
     async (json: string, source = "manual") => {
+      onMetaRef.current?.({ words: wordCount(plainFromTipTap(json)), saveLabel: "Saving" });
       try {
         const res = await fetch(`/api/novels/${novelId}`, {
           method: "PATCH",
@@ -72,13 +81,16 @@ export function ChapterEditor({
           const err = await res.json().catch(() => ({ error: "Save failed" }));
           setError(err.error || "Save failed");
           setStatus("Save failed");
+          onMetaRef.current?.({ words: wordCount(plainFromTipTap(json)), saveLabel: "Save failed" });
           return;
         }
         setError("");
+        onMetaRef.current?.({ words: wordCount(plainFromTipTap(json)), saveLabel: "Saved" });
         onSaved();
       } catch {
         setError("Save failed");
         setStatus("Save failed");
+        onMetaRef.current?.({ words: wordCount(plainFromTipTap(json)), saveLabel: "Save failed" });
       }
     },
     [novelId, proseId, onSaved, setStatus],
@@ -99,14 +111,21 @@ export function ChapterEditor({
       },
     },
     onUpdate: ({ editor: ed }) => {
+      const json = JSON.stringify(ed.getJSON());
+      onMetaRef.current?.({ words: wordCount(plainFromTipTap(json)), saveLabel: "Editing" });
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
-        void persist(JSON.stringify(ed.getJSON()));
+        void persist(json);
       }, 900);
     },
     onSelectionUpdate: () => setActive({ chapterId, sceneId: proseId, actId }),
     onFocus: () => setActive({ chapterId, sceneId: proseId, actId }),
   });
+
+  useEffect(() => {
+    onMetaRef.current?.({ words: wordCount(plainFromTipTap(initialContent)), saveLabel: "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proseId]);
 
   useEffect(() => {
     if (!editor) return;

@@ -343,8 +343,8 @@ export default function SettingsPage() {
         <section className="mt-8 rounded border border-border bg-surface p-4">
           <h2 className="font-serif text-xl">Actions</h2>
           <p className="mt-2 text-sm text-muted">
-            Saved prompt Actions (Expand, Rewrite, custom templates) are edited in the Write
-            workspace under the left Settings tab, next to Codex.
+            Saved prompt Actions (Expand, Rewrite, custom templates) are edited in Write under
+            the Actions tab, next to Codex.
           </p>
         </section>
       </main>

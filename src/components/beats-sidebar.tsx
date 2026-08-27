@@ -34,9 +34,7 @@ export function BeatsSidebar({
         className={`flex h-full w-[240px] shrink-0 flex-col border-l border-border bg-surface/70 p-3 ${className ?? ""}`}
       >
         <h2 className="font-serif text-lg">Beats</h2>
-        <p className="mt-3 text-sm text-muted">
         <p className="mt-3 text-sm text-muted">Open a chapter to edit its beats.</p>
-        </p>
       </aside>
     );
   }

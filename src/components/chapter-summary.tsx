@@ -72,7 +72,7 @@ export function ChapterSummaryRail({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 action: "upsertChapter",
-                payload: { id: chapterId, title: chapterTitle, summary: next },
+                payload: { id: chapterId, summary: next },
               }),
             });
             onChange();
@@ -83,7 +83,7 @@ export function ChapterSummaryRail({
         <button
           type="button"
           disabled={busy}
-          className="text-[11px] text-accent hover:underline disabled:opacity-50"
+          className="text-xs text-accent hover:underline disabled:opacity-50"
           onClick={async () => {
             setBusy(true);
             try {

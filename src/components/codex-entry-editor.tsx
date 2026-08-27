@@ -68,6 +68,7 @@ export function CodexEntryEditor({
     sliders: {} as Record<string, number>,
   });
   const [storyDraft, setStoryDraft] = useState({
+    title: story.title,
     premise: story.premise ?? "",
     genre: story.genre ?? "",
     tone: story.tone ?? "",
@@ -88,6 +89,7 @@ export function CodexEntryEditor({
     setStatus("");
     if (target.kind === "story") {
       setStoryDraft({
+        title: story.title,
         premise: story.premise ?? "",
         genre: story.genre ?? "",
         tone: story.tone ?? "",
@@ -183,6 +185,7 @@ export function CodexEntryEditor({
       body: JSON.stringify({
         action: "updateNovel",
         payload: {
+          title: storyDraft.title.trim() || story.title,
           premise: storyDraft.premise,
           genre: storyDraft.genre,
           tone: storyDraft.tone,
@@ -275,7 +278,12 @@ export function CodexEntryEditor({
             {target.kind === "story" ? (
               <>
                 <p className="text-xs text-muted">Story</p>
-                <p className="mt-1 font-serif text-2xl leading-tight">{heading}</p>
+                <input
+                  className="mt-0.5 w-full bg-transparent font-serif text-2xl leading-tight placeholder:text-muted focus-visible:outline-none"
+                  value={storyDraft.title}
+                  onChange={(e) => setStoryDraft((d) => ({ ...d, title: e.target.value }))}
+                  placeholder="Novel title"
+                />
               </>
             ) : (
               <>
@@ -309,7 +317,7 @@ export function CodexEntryEditor({
             {target.kind === "entry" ? (
               <button
                 type="button"
-                className="text-[11px] text-muted hover:text-text"
+                className="text-xs text-muted hover:text-text"
                 onClick={() => setTab("mentions")}
               >
                 {mentionCount} {mentionCount === 1 ? "mention" : "mentions"}
@@ -399,7 +407,7 @@ export function CodexEntryEditor({
                 onChange={(e) => setDraft((d) => ({ ...d, aliases: e.target.value }))}
                 placeholder="Add aliases, nicknames…"
               />
-              <span className="mt-1 block text-[11px] text-muted">
+              <span className="mt-1 block text-xs text-muted">
                 Names and aliases are detected in your prose.
               </span>
             </label>
@@ -410,7 +418,7 @@ export function CodexEntryEditor({
               value={draft.summary}
               onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))}
             />
-            <div className="mb-3 mt-1 flex items-center justify-between text-[11px] text-muted">
+            <div className="mb-3 mt-1 flex items-center justify-between text-xs text-muted">
               <span>
                 {words} {words === 1 ? "word" : "words"}
               </span>
